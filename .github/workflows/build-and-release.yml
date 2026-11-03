@@ -1,0 +1,141 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Run Unit & E2E Tests
+        run: go test -v ./...
+
+  build:
+    name: Build Multi-Platform
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Linux x86_64
+          - os: linux
+            arch: amd64
+            bin: TSL2NMOS
+            ext: ""
+            archive: TSL2NMOS-linux-amd64.tar.gz
+          # Linux ARM64 (Raspberry Pi / ARM Server)
+          - os: linux
+            arch: arm64
+            bin: TSL2NMOS
+            ext: ""
+            archive: TSL2NMOS-linux-arm64.tar.gz
+          # Windows x64
+          - os: windows
+            arch: amd64
+            bin: TSL2NMOS
+            ext: ".exe"
+            archive: TSL2NMOS-windows-amd64.zip
+          # macOS Intel (x86_64)
+          - os: darwin
+            arch: amd64
+            bin: TSL2NMOS
+            ext: ""
+            archive: TSL2NMOS-darwin-amd64.tar.gz
+          # macOS Apple Silicon (ARM64 M1/M2/M3/M4)
+          - os: darwin
+            arch: arm64
+            bin: TSL2NMOS
+            ext: ""
+            archive: TSL2NMOS-darwin-arm64.tar.gz
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          check-latest: true
+
+      - name: Compile Static Binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION="${GITHUB_REF_NAME:-1.0.0}"
+          if [ "${GITHUB_REF_TYPE:-}" != "tag" ]; then
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          mkdir -p build_stage
+          TARGET_BIN="build_stage/${{ matrix.bin }}${{ matrix.ext }}"
+          go build -trimpath -ldflags "-s -w -X main.Version=${VERSION}" -o "${TARGET_BIN}" ./cmd/TSL2NMOS
+
+      - name: Package Distributable Archive
+        run: |
+          mkdir -p package_dir dist
+          cp "build_stage/${{ matrix.bin }}${{ matrix.ext }}" package_dir/
+          mkdir -p package_dir/configs
+          cp configs/config.example.yaml package_dir/configs/
+          cp README.md LICENSE package_dir/
+
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            cd package_dir
+            zip -r "../dist/${{ matrix.archive }}" ./*
+            cd ..
+          else
+            chmod +x "package_dir/${{ matrix.bin }}"
+            cd package_dir
+            tar -czvf "../dist/${{ matrix.archive }}" ./*
+            cd ..
+          fi
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: dist/${{ matrix.archive }}
+
+  release:
+    name: Publish Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release_assets/
+          merge-multiple: true
+
+      - name: Generate SHA256 Checksums
+        run: |
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release_assets/*
+          generate_release_notes: true
