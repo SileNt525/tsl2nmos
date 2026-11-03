@@ -5,8 +5,8 @@ bin/
 *.dll
 *.so
 *.dylib
-TSL2NMOS
-TSL2NMOS-*
+/TSL2NMOS
+/TSL2NMOS-*
 
 # Test binaries and coverage reports
 *.test
