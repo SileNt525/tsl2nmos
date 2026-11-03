@@ -1,0 +1,15 @@
+[Unit]
+Description=TSL2NMOS - TSL 5.0 to AMWA NMOS IS-07 Tally Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/TSL2NMOS
+ExecStart=/opt/TSL2NMOS/TSL2NMOS -config /opt/TSL2NMOS/configs/config.yaml
+Restart=always
+RestartSec=2
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,45 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+TSL2NMOS
+TSL2NMOS-*
+
+# Test binaries and coverage reports
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Local runtime configuration and temporary state
+configs/config.yaml
+*.local.yaml
+*.tmp
+*.bak
+*.swp
+*~
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE and Editor configurations
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Log files
+*.log

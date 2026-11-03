@@ -1,0 +1,117 @@
+# ==============================================================================
+# TSL2NMOS 生产环境配置示例 (TSL 5.0 -> AMWA NMOS IS-07 WebSocket 网关)
+# 适用目标硬件: 任意兼容 AMWA NMOS IS-07 / IS-05 的 GPIO 接口设备
+# ==============================================================================
+
+node:
+  # 节点确定性 UUIDv5 种子：只要此字符串不变，重启或修改其他通道时所有 Node/Source/Sender UUID 永不改变
+  id_seed: "studio-a-TSL2NMOS-01"
+  label: "TSL2NMOS - Studio A Tally Gateway"
+  description: "TSL UMD v5.0 UDP to NMOS IS-07 Boolean Tally Bridge"
+  # NMOS 对外宣告的本机 IP："auto" 会自动根据与目标 NSA-010C 的路由表选择对应的媒体网口 IP
+  host_ip: "auto"
+  bind_addr: "0.0.0.0"
+  # 统一承载 NMOS IS-04/05/07 REST API、IS-07 WebSocket 及嵌入式 Web 控制台的端口
+  http_port: 8080
+  # 可选：指定网卡名（如 eth0 / ens192），用于读取真实 MAC 地址填入 IS-04 interfaces
+  interface_name: ""
+
+tsl:
+  # 接入工作模式:
+  # - "listen"     : 本机同时被动监听 UDP 与 TCP 8901 端口，接收导播台主动发来的数据（默认）
+  # - "tcp_client" : 导播服务器是 TCP Listener 时选用，本机主动连接 remote_addr 拉取 TSL 流（断线每 2s 自动重连）
+  # - "udp_client" : 导播服务器是 UDP Listener 时选用，本机主动向 remote_addr 发保活握手包拉流
+  transport_mode: "listen"
+  listen_addr: "0.0.0.0:8901"
+  remote_addr: "" # 例如: "192.168.42.100:8901"（tcp_client / udp_client 模式必填，只填 IP 默认补 :8901）
+  default_rule:
+    # 映射模式可选值:
+    # - any_color      : 任一灯位(RH/Text/LH)为 Red(1)/Amber(3) 触发红灯；Green(2)/Amber(3) 触发绿灯（推荐）
+    # - rh_pgm_lh_pvw  : 右灯(RH!=0) 触发红灯 PGM，左灯(LH!=0) 触发绿灯 PVW（兼容传统双灯切换台）
+    # - lh_pgm_rh_pvw  : 左灯(LH!=0) 触发红灯 PGM，右灯(RH!=0) 触发绿灯 PVW
+    # - rh_only        : 仅解析 RH 右灯颜色
+    # - lh_only        : 仅解析 LH 左灯颜色
+    # - text_only      : 仅解析 Text 文本灯颜色
+    mode: "any_color"
+    # 若摄像机红绿同时闭合会显示混色黄灯，可设为 true 让红灯(PGM)激活时自动切断绿灯(PVW)
+    pgm_overrides_pvw: false
+    invert_red: false
+    invert_green: false
+  # 切换台断流超时保护（毫秒，0 表示禁用；超时后 timeout_action 可选 "hold" 保持或 "clear" 全灭）
+  timeout_ms: 0
+  timeout_action: "hold"
+
+nmos:
+  # IS-04 注册模式:
+  # - "auto"     : 自动通过 mDNS (_nmos-register._tcp) 发现注册中心；无注册中心时自动以点对点模式运行
+  # - "static"   : 注册到下方指定的固定 Registry URL
+  # - "disabled" : 不连接外部注册中心，仅使用内置直连控制器或被动接受访问
+  registry_mode: "auto"
+  static_registry_url: ""
+  mdns_enabled: true
+  heartbeat_interval_sec: 5
+
+# 讯道列表：每路讯道会自动生成 2 个独立的 NMOS IS-07 Boolean Event Source（Red 与 Green）
+# 单台 Riedel StageLink NSA-010C 拥有 16 路 GPO 继电器，恰好对应 8 路摄像机的红+绿双色 Tally！
+channels:
+  - id: 1
+    name: "CAM 1"
+    screen: 0
+    match_all_screens: true
+    index: 1
+  - id: 2
+    name: "CAM 2"
+    screen: 0
+    match_all_screens: true
+    index: 2
+  - id: 3
+    name: "CAM 3"
+    screen: 0
+    match_all_screens: true
+    index: 3
+  - id: 4
+    name: "CAM 4"
+    screen: 0
+    match_all_screens: true
+    index: 4
+  - id: 5
+    name: "CAM 5"
+    screen: 0
+    match_all_screens: true
+    index: 5
+  - id: 6
+    name: "CAM 6"
+    screen: 0
+    match_all_screens: true
+    index: 6
+  - id: 7
+    name: "CAM 7"
+    screen: 0
+    match_all_screens: true
+    index: 7
+  - id: 8
+    name: "CAM 8"
+    screen: 0
+    match_all_screens: true
+    index: 8
+
+# 直连 IS-07-GPIO 设备配置（也可在启动后打开 http://<本机IP>:8080 网页一键扫描 NSA-010C 自动生成）
+direct_targets: []
+# 示例：
+# direct_targets:
+#   - id: "nsa-010c-studio1"
+#     label: "演播室 Riedel StageLink NSA-010C #1"
+#     base_url: "http://192.168.100.50:80"
+#     enabled: true
+#     auto_heal_interval_sec: 10
+#     bindings:
+#       - receiver_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+#         receiver_label: "GPO 1"
+#         channel_id: 1
+#         color: "red"
+#         enabled: true
+#       - receiver_id: "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+#         receiver_label: "GPO 2"
+#         channel_id: 1
+#         color: "green"
+#         enabled: true

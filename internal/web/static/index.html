@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TSL2NMOS | TSL 5.0 → NMOS IS-07 Broadcast Tally Gateway</title>
+<style>
+:root {
+  --bg: #0b0e14;
+  --panel: #131822;
+  --panel-alt: #1a2130;
+  --border: #283246;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #388bfd;
+  --tally-red: #ff2e38;
+  --tally-red-glow: rgba(255, 46, 56, 0.45);
+  --tally-green: #00e065;
+  --tally-green-glow: rgba(0, 224, 101, 0.40);
+  --warn: #d29922;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", monospace, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  font-size: 14px;
+}
+header {
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.4px; }
+.hdr-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600;
+  background: var(--panel-alt); border: 1px solid var(--border);
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--tally-green); box-shadow: 0 0 8px var(--tally-green-glow); }
+.dot.warn { background: var(--warn); }
+.dot.err { background: var(--tally-red); }
+.lang-switch {
+  display: inline-flex;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 2px;
+  gap: 2px;
+}
+.lang-switch button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.12s;
+}
+.lang-switch button:hover { color: var(--text); border-color: transparent; }
+.lang-switch button.active { background: #1f6feb; color: #fff; }
+.tabs {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px 0;
+  border-bottom: 1px solid var(--border); background: var(--panel);
+}
+.tab-btn {
+  background: transparent; color: var(--muted); border: none;
+  padding: 9px 16px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+  border-bottom: 2px solid transparent; border-radius: 0; transition: 0.15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+main { max-width: 1440px; margin: 0 auto; padding: 18px 20px 40px; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+.stats-bar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
+.stat-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 15px;
+}
+.stat-card .lbl { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+.stat-card .val { font-size: 15px; font-weight: 700; word-break: break-all; }
+.stat-card .sub { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.toolbar {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+  gap: 10px; margin-bottom: 14px;
+}
+button, select, input {
+  font-family: inherit; font-size: 13px; color: var(--text);
+  background: var(--panel-alt); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 11px;
+}
+button { cursor: pointer; font-weight: 600; transition: 0.12s; }
+button:hover { border-color: var(--accent); }
+button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; }
+button.primary:hover { background: #388bfd; }
+button.danger { background: rgba(255,46,56,0.14); border-color: #ff2e38; color: #ff7b82; }
+.matrix-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 12px;
+}
+.cam-card {
+  background: var(--panel); border: 2px solid var(--border);
+  border-radius: 8px; padding: 12px; transition: 0.1s;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.cam-card.pgm {
+  border-color: var(--tally-red);
+  box-shadow: 0 0 18px var(--tally-red-glow);
+}
+.cam-card.pvw:not(.pgm) {
+  border-color: var(--tally-green);
+  box-shadow: 0 0 14px var(--tally-green-glow);
+}
+.cam-head { display: flex; justify-content: space-between; align-items: center; }
+.cam-title { font-weight: 700; font-size: 15px; }
+.cam-idx { font-size: 11.5px; color: var(--muted); font-family: monospace; }
+.umd-box {
+  background: #07090d; border: 1px solid #212836; border-radius: 5px;
+  padding: 5px 8px; font-family: monospace; font-size: 13px;
+  color: #ffd33d; min-height: 28px; display: flex; justify-content: space-between; align-items: center;
+}
+.lamps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lamp {
+  text-align: center; padding: 6px 0; border-radius: 5px;
+  font-weight: 700; font-size: 12.5px; letter-spacing: 0.5px;
+  background: #171c26; color: #566070; border: 1px solid #252d3d;
+}
+.lamp.red-on {
+  background: var(--tally-red); color: #fff; border-color: #ff6b72;
+  box-shadow: 0 0 12px var(--tally-red-glow);
+}
+.lamp.green-on {
+  background: var(--tally-green); color: #042412; border-color: #5aff9f;
+  box-shadow: 0 0 12px var(--tally-green-glow);
+}
+.ov-btns { display: flex; gap: 4px; }
+.ov-btns button { flex: 1; padding: 4px 2px; font-size: 11.5px; }
+.ov-btns button.active-ov { border-color: #ffd33d; color: #ffd33d; background: rgba(255,211,61,0.12); }
+.card-panel {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 16px; margin-bottom: 16px;
+}
+.card-panel h2 { font-size: 15px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+.tag-pill {
+  display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 700;
+}
+.tag-RED { background: rgba(255,46,56,0.22); color: #ff6b72; }
+.tag-GREEN { background: rgba(0,224,101,0.2); color: #3fb950; }
+.tag-AMBER { background: rgba(210,153,34,0.25); color: #e3b341; }
+.tag-OFF { background: #1c2230; color: #6e7681; }
+.form-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.toast {
+  position: fixed; right: 20px; bottom: 20px; padding: 10px 16px;
+  border-radius: 6px; background: #1f6feb; color: #fff; font-weight: 600;
+  display: none; z-index: 999; box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>TSL2NMOS</h1>
+    <span class="badge"><span id="sseDot" class="dot"></span><span id="sseText"></span></span>
+    <span class="badge" id="wsBadge"><span id="wsDot" class="dot"></span><span id="wsText"></span></span>
+  </div>
+  <div class="hdr-right">
+    <div class="mono" style="color:var(--muted)" id="hdrEndpoints"></div>
+    <div class="lang-switch" role="group" aria-label="Language Switcher">
+      <button type="button" id="langBtnZh" onclick="setLang('zh')">中文</button>
+      <button type="button" id="langBtnEn" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('matrix', this)" data-i18n="tab_matrix"></button>
+  <button class="tab-btn" onclick="switchTab('targets', this)" data-i18n="tab_targets"></button>
+  <button class="tab-btn" onclick="switchTab('channels', this)" data-i18n="tab_channels"></button>
+  <button class="tab-btn" onclick="switchTab('sniffer', this)" data-i18n="tab_sniffer"></button>
+</div>
+
+<main>
+  <!-- TAB 1: LIVE TALLY MATRIX -->
+  <div id="tab-matrix" class="tab-pane active">
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="lbl" data-i18n="stat_tsl_title"></div>
+        <div class="val mono" id="stTslAddr">-</div>
+        <div class="sub" id="stTslPkts">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl" data-i18n="stat_ws_title"></div>
+        <div class="val mono" id="stWsUri">-</div>
+        <div class="sub" id="stWsClients">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl" data-i18n="stat_reg_title"></div>
+        <div class="val" id="stRegState">-</div>
+        <div class="sub mono" id="stRegUrl">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl" data-i18n="stat_bind_title"></div>
+        <div class="val" id="stBindSummary">-</div>
+        <div class="sub" id="stUptime">-</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div style="color:var(--muted);font-size:13px;" data-i18n-html="matrix_tip_html"></div>
+      <div style="display:flex;gap:8px;">
+        <button onclick="setOverride(0, 'auto')" data-i18n="btn_all_auto"></button>
+        <button onclick="setOverride(0, 'force_off')" data-i18n="btn_all_off"></button>
+      </div>
+    </div>
+
+    <div id="matrixGrid" class="matrix-grid"></div>
+  </div>
+
+  <!-- TAB 2: IS-05 DIRECT GPO PATCHING -->
+  <div id="tab-targets" class="tab-pane">
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="targets_add_title"></span>
+        <button onclick="scanMDNSNodes()" data-i18n="btn_mdns_scan"></button>
+      </h2>
+      <div id="mdnsResult" style="margin-bottom:10px;display:none;"></div>
+      <div class="form-row">
+        <div class="field" style="flex:1;min-width:260px;">
+          <label data-i18n="lbl_target_url"></label>
+          <input type="text" id="inpTargetUrl" data-i18n-placeholder="ph_target_url">
+        </div>
+        <div class="field" style="min-width:200px;">
+          <label data-i18n="lbl_target_label"></label>
+          <input type="text" id="inpTargetLabel" data-i18n-placeholder="ph_target_label">
+        </div>
+        <button class="primary" onclick="addAndInspectTarget()" data-i18n="btn_probe_add"></button>
+      </div>
+    </div>
+
+    <div id="targetsContainer"></div>
+
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="ws_sessions_title"></span>
+        <button onclick="resyncTargets()" data-i18n="btn_resync_all"></button>
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="th_ws_remote"></th>
+            <th data-i18n="th_ws_conn_at"></th>
+            <th data-i18n="th_ws_health"></th>
+            <th data-i18n="th_ws_subs"></th>
+          </tr>
+        </thead>
+        <tbody id="wsClientsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: CHANNELS & TSL RULES -->
+  <div id="tab-channels" class="tab-pane">
+    <div class="card-panel" oninput="markCfgDirty()" onchange="markCfgDirty()">
+      <h2>
+        <span><span data-i18n="cfg_global_title"></span> <span id="cfgDirtyHint" style="display:none;color:var(--warn);font-size:12.5px;margin-left:8px;" data-i18n="cfg_dirty_hint"></span></span>
+        <button class="primary" onclick="saveFullConfig()" data-i18n="btn_save_apply"></button>
+      </h2>
+      <div class="form-row">
+        <div class="field">
+          <label data-i18n="lbl_tsl_mode"></label>
+          <select id="cfgTslMode" onchange="toggleTslModeFields()">
+            <option value="listen" data-i18n="opt_tsl_listen"></option>
+            <option value="tcp_client" data-i18n="opt_tsl_tcp"></option>
+            <option value="udp_client" data-i18n="opt_tsl_udp"></option>
+          </select>
+        </div>
+        <div class="field" id="fldTslListen">
+          <label data-i18n="lbl_tsl_listen"></label>
+          <input type="text" id="cfgTslListen" placeholder="0.0.0.0:8901">
+        </div>
+        <div class="field" id="fldTslRemote" style="display:none;min-width:220px;">
+          <label data-i18n="lbl_tsl_remote"></label>
+          <input type="text" id="cfgTslRemote" data-i18n-placeholder="ph_tsl_remote">
+        </div>
+        <div class="field">
+          <label data-i18n="lbl_host_ip"></label>
+          <input type="text" id="cfgHostIp">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label data-i18n="lbl_rule_mode"></label>
+          <select id="cfgRuleMode">
+            <option value="any_color" data-i18n="opt_rule_any"></option>
+            <option value="rh_pgm_lh_pvw" data-i18n="opt_rule_rh_lh"></option>
+            <option value="lh_pgm_rh_pvw" data-i18n="opt_rule_lh_rh"></option>
+            <option value="rh_only" data-i18n="opt_rule_rh"></option>
+            <option value="lh_only" data-i18n="opt_rule_lh"></option>
+            <option value="text_only" data-i18n="opt_rule_text"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="lbl_pgm_over_pvw"></label>
+          <select id="cfgPgmOverPvw">
+            <option value="false" data-i18n="opt_pgm_over_false"></option>
+            <option value="true" data-i18n="opt_pgm_over_true"></option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field">
+          <label data-i18n="lbl_reg_mode"></label>
+          <select id="cfgRegMode">
+            <option value="auto" data-i18n="opt_reg_auto"></option>
+            <option value="static" data-i18n="opt_reg_static"></option>
+            <option value="disabled" data-i18n="opt_reg_disabled"></option>
+          </select>
+        </div>
+        <div class="field" style="flex:1;min-width:280px;">
+          <label data-i18n="lbl_reg_url"></label>
+          <input type="text" id="cfgRegUrl" placeholder="http://192.168.1.10:8010/x-nmos/registration/v1.3">
+        </div>
+        <div class="field">
+          <label data-i18n="lbl_inv_red"></label>
+          <select id="cfgInvRed">
+            <option value="false" data-i18n="opt_pol_normal"></option>
+            <option value="true" data-i18n="opt_pol_invert"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="lbl_inv_green"></label>
+          <select id="cfgInvGreen">
+            <option value="false" data-i18n="opt_pol_normal"></option>
+            <option value="true" data-i18n="opt_pol_invert"></option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="ch_table_title"></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="quickAddChannels(8)" data-i18n="btn_quick_8"></button>
+          <button onclick="quickAddChannels(16)" data-i18n="btn_quick_16"></button>
+          <button onclick="addSingleChannel()" data-i18n="btn_add_ch"></button>
+          <button class="primary" onclick="saveFullConfig()" data-i18n="btn_save_reload"></button>
+        </div>
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="th_ch_id"></th>
+            <th data-i18n="th_ch_name"></th>
+            <th data-i18n="th_ch_any_scr"></th>
+            <th data-i18n="th_ch_scr"></th>
+            <th data-i18n="th_ch_idx"></th>
+            <th data-i18n="th_ch_uuid"></th>
+            <th data-i18n="th_ch_act"></th>
+          </tr>
+        </thead>
+        <tbody id="channelsCfgBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 4: TSL SNIFFER & SIMULATOR -->
+  <div id="tab-sniffer" class="tab-pane">
+    <div class="card-panel">
+      <h2 data-i18n="sim_title"></h2>
+      <div class="form-row">
+        <div class="field"><label>Screen</label><input type="number" id="simScreen" value="0" min="0" max="65535" style="width:90px"></div>
+        <div class="field"><label>Display Index</label><input type="number" id="simIndex" value="1" min="0" max="65535" style="width:110px"></div>
+        <div class="field"><label data-i18n="lbl_sim_rh"></label>
+          <select id="simRH"><option value="0">0 - OFF</option><option value="1" selected>1 - RED</option><option value="2">2 - GREEN</option><option value="3">3 - AMBER</option></select>
+        </div>
+        <div class="field"><label data-i18n="lbl_sim_txt"></label>
+          <select id="simTextTally"><option value="0" selected>0 - OFF</option><option value="1">1 - RED</option><option value="2">2 - GREEN</option><option value="3">3 - AMBER</option></select>
+        </div>
+        <div class="field"><label data-i18n="lbl_sim_lh"></label>
+          <select id="simLH"><option value="0" selected>0 - OFF</option><option value="1">1 - RED</option><option value="2">2 - GREEN</option><option value="3">3 - AMBER</option></select>
+        </div>
+        <div class="field"><label data-i18n="lbl_sim_umd"></label><input type="text" id="simLabel" value="CAM 1 LIVE" style="width:150px"></div>
+        <button class="primary" onclick="sendSimTSL()" data-i18n="btn_sim_send"></button>
+      </div>
+    </div>
+
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="sniff_title"></span>
+        <button onclick="clearSnifferTable()" data-i18n="btn_sniff_clear"></button>
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="th_sniff_time"></th>
+            <th data-i18n="th_sniff_src"></th>
+            <th data-i18n="th_sniff_scr"></th>
+            <th data-i18n="th_sniff_idx"></th>
+            <th data-i18n="th_sniff_rh"></th>
+            <th data-i18n="th_sniff_txt"></th>
+            <th data-i18n="th_sniff_lh"></th>
+            <th data-i18n="th_sniff_umd"></th>
+            <th data-i18n="th_sniff_fmt"></th>
+          </tr>
+        </thead>
+        <tbody id="snifferBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const I18N = {
+  zh: {
+    doc_title: 'TSL2NMOS | TSL 5.0 → NMOS IS-07 广播级 Tally 网关',
+    sse_connecting: '连接中...',
+    sse_online: '实时在线',
+    sse_reconnecting: '重连中...',
+    ws_badge: 'IS-07 接收端: {n}',
+    tab_matrix: '实时 Tally 矩阵 & 强制测试',
+    tab_targets: 'GPO 交叉点绑定',
+    tab_channels: '讯道与 TSL 映射规则配置',
+    tab_sniffer: 'TSL 5.0 实时抓包与信号发生器',
+    stat_tsl_title: 'TSL 5.0 信号接入状态',
+    stat_tsl_pkts: '报文: {pkts} | DMSG: {msgs} | 错包: {errs}',
+    stat_tsl_src: ' | 来源: {src}',
+    stat_ws_title: 'NMOS IS-07 WebSocket 服务端',
+    stat_ws_clients: '活跃 WebSocket 会话: {n}',
+    stat_reg_title: 'NMOS IS-04 注册中心状态',
+    reg_disabled: '已禁用 (纯直连模式)',
+    reg_disabled_sub: '无需外部注册表',
+    reg_online: '已注册在线',
+    reg_p2p: '点对点模式 (未检出外部注册表)',
+    reg_p2p_sub: 'mDNS 监听与直连控制器运行中',
+    stat_bind_title: '直连 GPO 路由激活状态',
+    stat_bind_active: '{ok} / {total} 路 GPO 已激活',
+    stat_bind_none: '未配置直连 GPO (等待绑定或外部IS-05)',
+    stat_uptime: '持续运行: {t}',
+    matrix_tip_html: '提示：点击单路卡片下方的 <b>强红/强绿/双亮/强灭</b> 可脱离切换台直接驱动远端 GPO 继电器测试摄像机 Tally 连线。',
+    btn_all_auto: '全部恢复自动 (Auto)',
+    btn_all_off: '全部强制熄灭',
+    lamp_pgm: 'PGM 红 {st}',
+    lamp_pvw: 'PVW 绿 {st}',
+    ov_auto: '自动',
+    ov_red: '强红',
+    ov_green: '强绿',
+    ov_both: '双亮',
+    ov_off: '强灭',
+    targets_add_title: '添加 / 扫描 NMOS IS-07-GPIO 接收设备',
+    btn_mdns_scan: '局域网 mDNS 扫描设备',
+    lbl_target_url: 'NMOS 设备地址（支持直接填 IP 自动探测端口，或填完整 http://IP:端口）',
+    ph_target_url: '例如: 192.168.42.59 或 http://192.168.42.59:4450',
+    lbl_target_label: '设备备注名称',
+    ph_target_label: '例如: 1号演播室 GPIO 接口箱 #1',
+    btn_probe_add: '探测 GPO 并加入配置',
+    mdns_scanning: '正在发送 mDNS _nmos-node._tcp 查询...',
+    mdns_empty: '局域网同网段暂未收到其他 mDNS 节点响应，可直接在下方手动输入目标设备的 IP 地址（支持跨网段）。',
+    mdns_found: '发现局域网 NMOS 节点：',
+    targets_empty: '尚未添加直连 IS-07-GPIO 设备。若现场没有部署外部 NMOS 广播控制器，请在上方输入目标 IS-07-GPIO 设备的 IP 地址进行扫描和 GPO 绑定。',
+    opt_start_ch: '起始: #{id} {name}',
+    btn_auto_map: '一键奇偶配线 (红/绿)',
+    btn_rescan_gpo: '重新扫描 GPO',
+    btn_delete_target: '删除设备',
+    btn_save_patch: '保存并立即激活路由',
+    th_enable: '启用',
+    th_gpo_port: '接收端端口 (GPO)',
+    th_bound_ch: '绑定讯道',
+    th_tally_color: 'Tally 颜色',
+    th_is05_status: 'IS-05 路由状态',
+    opt_color_red: '🔴 红 Tally (PGM)',
+    opt_color_green: '🟢 绿 Tally (PVW)',
+    st_disabled: '未启用',
+    st_patched: '● 已激活 (Active)',
+    st_patching: '下发中...',
+    ws_sessions_title: '已连接本机的 IS-07 WebSocket 接收端实时会话',
+    btn_resync_all: '立即重新校验/下发全部路由',
+    th_ws_remote: '远端 IP:端口',
+    th_ws_conn_at: '建连时间',
+    th_ws_health: '最近心跳 (5s Health)',
+    th_ws_subs: '已订阅 Source 数量',
+    ws_empty: '暂无活跃 WebSocket 接收端连接（当接收端设备被 IS-05 路由激活后会自动连入此处）',
+    ws_subs_count: '{n} 个事件源',
+    cfg_global_title: '全局系统与 TSL 5.0 映射参数',
+    cfg_dirty_hint: '● 有未保存修改，请点击右侧保存生效',
+    btn_save_apply: '保存并立即生效',
+    lbl_tsl_mode: 'TSL 5.0 接入工作模式 (保存即热切换)',
+    opt_tsl_listen: '被动监听 (推荐：导播服务器向本机 IP:8901 发送 UDP/TCP，无需填服务器 IP)',
+    opt_tsl_tcp: '主动拉取 TCP (导播服务器作为 TCP Listener 等待连接时使用)',
+    opt_tsl_udp: '主动握手 UDP + 监听 (导播服务器作为 UDP Listener 需心跳触发时使用)',
+    lbl_tsl_listen: '本机监听地址 (默认 0.0.0.0:8901)',
+    lbl_tsl_remote: '导播服务器 IP:端口 (仅 Listener 拉流时填写)',
+    ph_tsl_remote: '例如: 192.168.42.15:8901',
+    lbl_host_ip: 'NMOS 宣告本机 IP (auto 自动按路由选网卡)',
+    lbl_rule_mode: '默认红/绿 Tally 判定模式',
+    opt_rule_any: '智能兼容: 左/右灯位任一 Red=红Tally, Green=绿Tally, Amber=双亮 (忽略 Text 文本背光，推荐)',
+    opt_rule_rh_lh: '双灯位经典: RH右灯非0=红(PGM), LH左灯非0=绿(PVW)',
+    opt_rule_lh_rh: '双灯位反序: LH左灯非0=红(PGM), RH右灯非0=绿(PVW)',
+    opt_rule_rh: '仅看 RH 右灯颜色 (1=红, 2=绿, 3=红+绿)',
+    opt_rule_lh: '仅看 LH 左灯颜色 (1=红, 2=绿, 3=红+绿)',
+    opt_rule_text: '仅看 Text 文本灯颜色 (1=红, 2=绿, 3=红+绿)',
+    lbl_pgm_over_pvw: 'PGM 优先抑制 PVW',
+    opt_pgm_over_false: '关闭 (允许红绿同时闭合)',
+    opt_pgm_over_true: '开启 (红灯亮时强制断开绿灯)',
+    lbl_reg_mode: 'NMOS IS-04 注册模式',
+    opt_reg_auto: 'auto (自动 mDNS 发现 Registry，无则点对点运行)',
+    opt_reg_static: 'static (指定固定 Registry URL)',
+    opt_reg_disabled: 'disabled (纯直连模式，不注册外部 Registry)',
+    lbl_reg_url: '静态 IS-04 Registration URL (仅 static 模式生效)',
+    lbl_inv_red: '红灯极性反转',
+    lbl_inv_green: '绿灯极性反转',
+    opt_pol_normal: '正常 (常开)',
+    opt_pol_invert: '反转 (常闭)',
+    ch_table_title: '讯道映射表（每路讯道自动生成独立的 Red / Green 两个 IS-07 Boolean Source）',
+    btn_quick_8: '快速生成 1~8 路',
+    btn_quick_16: '快速生成 1~16 路',
+    btn_add_ch: '+ 新增单路讯道',
+    btn_save_reload: '保存并热重载配置',
+    th_ch_id: '讯道号 (ID)',
+    th_ch_name: '名称',
+    th_ch_any_scr: '匹配任意 Screen',
+    th_ch_scr: '指定 Screen',
+    th_ch_idx: 'TSL Display Index',
+    th_ch_uuid: 'NMOS Source UUID (Red / Green)',
+    th_ch_act: '操作',
+    uuid_pending: '(保存后生成)',
+    btn_delete: '删除',
+    sim_title: '内置 TSL 5.0 UDP 回环信号发生器（无需切换台即可验证全链路）',
+    lbl_sim_rh: 'RH 右灯',
+    lbl_sim_txt: 'Text 文本灯',
+    lbl_sim_lh: 'LH 左灯',
+    lbl_sim_umd: 'UMD 源名称文本',
+    btn_sim_send: '发送模拟 TSL 5.0 UDP 包',
+    sniff_title: 'TSL 5.0 UDP 实时报文嗅探器（最新 100 条）',
+    btn_sniff_clear: '清空视图',
+    th_sniff_time: '时间',
+    th_sniff_src: '发送端地址',
+    th_sniff_scr: 'Screen',
+    th_sniff_idx: 'Index',
+    th_sniff_rh: 'RH 右灯',
+    th_sniff_txt: 'Text 灯',
+    th_sniff_lh: 'LH 左灯',
+    th_sniff_umd: 'UMD 文本',
+    th_sniff_fmt: '帧格式',
+    sniff_empty: '等待导播切换台发送 TSL 5.0 UDP 数据包...',
+    toast_load_cfg_err: '加载配置失败: {err}',
+    toast_cfg_saved: '配置已原子保存至 YAML 并完成热重载',
+    toast_save_err: '保存失败: {err}',
+    toast_enter_url: '请输入目标 NMOS 设备地址',
+    toast_probed: '成功探测到 {n} 路 GPO 接收器！',
+    toast_probe_err: '探测设备失败: {err}',
+    toast_refreshed_gpo: '已刷新 {n} 路 GPO 列表',
+    toast_refresh_err: '刷新失败: {err}',
+    toast_need_ch: '请先添加至少 1 路讯道',
+    toast_auto_mapped: '已从 #{id} {name} 起填充 {n} 路奇偶红/绿 GPO，请点击“保存并立即激活路由”生效',
+    toast_patch_saved: 'GPO 交叉点绑定已保存并立即下发 IS-05 激活指令',
+    toast_target_removed: '已移除目标设备',
+    toast_resync: '已触发后台 IS-05 路由重同步',
+    toast_sim_sent: '已发送模拟 TSL 5.0 UDP 数据包'
+  },
+  en: {
+    doc_title: 'TSL2NMOS | TSL 5.0 → NMOS IS-07 Broadcast Tally Gateway',
+    sse_connecting: 'Connecting...',
+    sse_online: 'Live',
+    sse_reconnecting: 'Reconnecting...',
+    ws_badge: 'IS-07 Receivers: {n}',
+    tab_matrix: 'Live Tally Matrix & Override',
+    tab_targets: 'GPO Crosspoint Patching',
+    tab_channels: 'Channels & TSL Mapping',
+    tab_sniffer: 'TSL 5.0 Sniffer & Simulator',
+    stat_tsl_title: 'TSL 5.0 Signal Input',
+    stat_tsl_pkts: 'Pkts: {pkts} | DMSG: {msgs} | Err: {errs}',
+    stat_tsl_src: ' | Src: {src}',
+    stat_ws_title: 'NMOS IS-07 WebSocket Server',
+    stat_ws_clients: 'Active WebSocket Sessions: {n}',
+    stat_reg_title: 'NMOS IS-04 Registry Status',
+    reg_disabled: 'Disabled (Direct Mode Only)',
+    reg_disabled_sub: 'No external registry required',
+    reg_online: 'Registered Online',
+    reg_p2p: 'Peer-to-Peer (No Registry Detected)',
+    reg_p2p_sub: 'mDNS discovery & direct patcher active',
+    stat_bind_title: 'Direct GPO Patch Status',
+    stat_bind_active: '{ok} / {total} GPOs Patched',
+    stat_bind_none: 'No direct GPOs configured (awaiting patch or external IS-05)',
+    stat_uptime: 'Uptime: {t}',
+    matrix_tip_html: 'Tip: Click <b>Red / Grn / Both / Off</b> on any channel card to manually drive remote GPO relays without a switcher.',
+    btn_all_auto: 'All Auto',
+    btn_all_off: 'Force All Off',
+    lamp_pgm: 'PGM RED {st}',
+    lamp_pvw: 'PVW GRN {st}',
+    ov_auto: 'Auto',
+    ov_red: 'Red',
+    ov_green: 'Grn',
+    ov_both: 'Both',
+    ov_off: 'Off',
+    targets_add_title: 'Add / Scan NMOS IS-07-GPIO Receiver Devices',
+    btn_mdns_scan: 'Scan LAN via mDNS',
+    lbl_target_url: 'NMOS Device Address (IP with auto port probe, or full http://IP:Port)',
+    ph_target_url: 'e.g. 192.168.42.59 or http://192.168.42.59:4450',
+    lbl_target_label: 'Device Alias / Label',
+    ph_target_label: 'e.g. Studio 1 GPIO Box #1',
+    btn_probe_add: 'Probe GPOs & Add Device',
+    mdns_scanning: 'Querying mDNS _nmos-node._tcp on LAN...',
+    mdns_empty: 'No mDNS nodes responded on the local subnet. You can manually enter the target device IP below (cross-subnet supported).',
+    mdns_found: 'Discovered LAN NMOS Nodes: ',
+    targets_empty: 'No direct IS-07-GPIO devices added yet. If no external NMOS broadcast controller is deployed, enter the target device IP above to scan and patch GPOs.',
+    opt_start_ch: 'Start: #{id} {name}',
+    btn_auto_map: 'Auto Odd/Even Patch (R/G)',
+    btn_rescan_gpo: 'Rescan GPOs',
+    btn_delete_target: 'Remove Device',
+    btn_save_patch: 'Save & Activate Patch',
+    th_enable: 'Enable',
+    th_gpo_port: 'Receiver Port (GPO)',
+    th_bound_ch: 'Channel',
+    th_tally_color: 'Tally Color',
+    th_is05_status: 'IS-05 Patch Status',
+    opt_color_red: '🔴 Red Tally (PGM)',
+    opt_color_green: '🟢 Green Tally (PVW)',
+    st_disabled: 'Disabled',
+    st_patched: '● Patched (Active)',
+    st_patching: 'Patching...',
+    ws_sessions_title: 'Active Incoming IS-07 WebSocket Receiver Sessions',
+    btn_resync_all: 'Re-verify & Resync All Patches',
+    th_ws_remote: 'Remote IP:Port',
+    th_ws_conn_at: 'Connected At',
+    th_ws_health: 'Last Heartbeat (5s Health)',
+    th_ws_subs: 'Subscribed Sources',
+    ws_empty: 'No active WebSocket receiver sessions (devices connect here automatically once activated via IS-05)',
+    ws_subs_count: '{n} source(s)',
+    cfg_global_title: 'Global System & TSL 5.0 Mapping Parameters',
+    cfg_dirty_hint: '● Unsaved changes — click Save on the right to apply',
+    btn_save_apply: 'Save & Apply Immediately',
+    lbl_tsl_mode: 'TSL 5.0 Transport Mode (Hot-swappable on save)',
+    opt_tsl_listen: 'Passive Listen (Recommended: switcher sends UDP/TCP to local IP:8901)',
+    opt_tsl_tcp: 'Active TCP Client (Connect to switcher acting as TCP Listener)',
+    opt_tsl_udp: 'Active UDP Client + Listen (Send keepalives to UDP Listener switcher)',
+    lbl_tsl_listen: 'Local Listen Address (Default 0.0.0.0:8901)',
+    lbl_tsl_remote: 'Switcher IP:Port (For client pull modes only)',
+    ph_tsl_remote: 'e.g. 192.168.42.15:8901',
+    lbl_host_ip: 'NMOS Advertised Host IP ("auto" selects NIC by route)',
+    lbl_rule_mode: 'Default Red / Green Tally Evaluation Rule',
+    opt_rule_any: 'Smart Any-Lamp: LH/RH Red=PGM, Green=PVW, Amber=Both (Ignores Text backlight, Recommended)',
+    opt_rule_rh_lh: 'Classic Dual-Lamp: RH!=0 → Red (PGM), LH!=0 → Green (PVW)',
+    opt_rule_lh_rh: 'Reversed Dual-Lamp: LH!=0 → Red (PGM), RH!=0 → Green (PVW)',
+    opt_rule_rh: 'RH Lamp Color Only (1=Red, 2=Green, 3=Both)',
+    opt_rule_lh: 'LH Lamp Color Only (1=Red, 2=Green, 3=Both)',
+    opt_rule_text: 'Text Tally Color Only (1=Red, 2=Green, 3=Both)',
+    lbl_pgm_over_pvw: 'PGM Overrides PVW',
+    opt_pgm_over_false: 'Off (Allow simultaneous Red + Green)',
+    opt_pgm_over_true: 'On (Suppress Green when Red is active)',
+    lbl_reg_mode: 'NMOS IS-04 Registration Mode',
+    opt_reg_auto: 'auto (Discover Registry via mDNS; fallback to P2P)',
+    opt_reg_static: 'static (Use static Registry URL)',
+    opt_reg_disabled: 'disabled (Direct mode only, no external Registry)',
+    lbl_reg_url: 'Static IS-04 Registration URL (Used in static mode only)',
+    lbl_inv_red: 'Invert Red Polarity',
+    lbl_inv_green: 'Invert Green Polarity',
+    opt_pol_normal: 'Normal (Active-High / NO)',
+    opt_pol_invert: 'Inverted (Active-Low / NC)',
+    ch_table_title: 'Channel Mapping Table (Each channel generates dedicated Red & Green IS-07 Boolean Sources)',
+    btn_quick_8: 'Quick Fill 1–8',
+    btn_quick_16: 'Quick Fill 1–16',
+    btn_add_ch: '+ Add Channel',
+    btn_save_reload: 'Save & Hot-Reload',
+    th_ch_id: 'Channel ID',
+    th_ch_name: 'Name',
+    th_ch_any_scr: 'Any Screen',
+    th_ch_scr: 'Screen',
+    th_ch_idx: 'TSL Display Index',
+    th_ch_uuid: 'NMOS Source UUID (Red / Green)',
+    th_ch_act: 'Action',
+    uuid_pending: '(generated on save)',
+    btn_delete: 'Delete',
+    sim_title: 'Built-in TSL 5.0 Loopback Signal Generator (End-to-end test without switcher)',
+    lbl_sim_rh: 'RH Tally',
+    lbl_sim_txt: 'Text Tally',
+    lbl_sim_lh: 'LH Tally',
+    lbl_sim_umd: 'UMD Label Text',
+    btn_sim_send: 'Send Simulated TSL 5.0 Packet',
+    sniff_title: 'Live TSL 5.0 Packet Sniffer (Latest 100 Messages)',
+    btn_sniff_clear: 'Clear',
+    th_sniff_time: 'Time',
+    th_sniff_src: 'Source Address',
+    th_sniff_scr: 'Screen',
+    th_sniff_idx: 'Index',
+    th_sniff_rh: 'RH Tally',
+    th_sniff_txt: 'Text Tally',
+    th_sniff_lh: 'LH Tally',
+    th_sniff_umd: 'UMD Text',
+    th_sniff_fmt: 'Framing',
+    sniff_empty: 'Waiting for incoming TSL 5.0 packets from switcher...',
+    toast_load_cfg_err: 'Failed to load config: {err}',
+    toast_cfg_saved: 'Configuration saved to YAML and hot-reloaded',
+    toast_save_err: 'Save failed: {err}',
+    toast_enter_url: 'Please enter a target NMOS device address',
+    toast_probed: 'Successfully probed {n} GPO receiver(s)!',
+    toast_probe_err: 'Device probe failed: {err}',
+    toast_refreshed_gpo: 'Refreshed {n} GPO receiver(s)',
+    toast_refresh_err: 'Refresh failed: {err}',
+    toast_need_ch: 'Please add at least 1 channel first',
+    toast_auto_mapped: 'Mapped {n} odd/even Red/Green GPO(s) starting from #{id} {name}. Click "Save & Activate Patch" to apply.',
+    toast_patch_saved: 'GPO crosspoint bindings saved & IS-05 activation dispatched',
+    toast_target_removed: 'Target device removed',
+    toast_resync: 'Triggered background IS-05 patch resync',
+    toast_sim_sent: 'Simulated TSL 5.0 packet injected'
+  }
+};
+
+function detectInitialLang() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('lang');
+    if (q === 'en' || q === 'zh') {
+      localStorage.setItem('tsl2nmos_lang', q);
+      return q;
+    }
+    const saved = localStorage.getItem('tsl2nmos_lang');
+    if (saved === 'en' || saved === 'zh') return saved;
+  } catch (_) {}
+  const nav = (navigator.language || '').toLowerCase();
+  return nav.startsWith('zh') ? 'zh' : 'en';
+}
+
+let currentLang = detectInitialLang();
+let sseState = 'connecting'; // 'connecting' | 'online' | 'reconnecting'
+let mdnsScanState = null;    // null | {type:'scanning'|'empty'|'found'|'error', nodes:[], err:''}
+let appConfig = null;
+let latestStatus = null;
+let snifferRows = [];
+let inspectedCache = {};
+let autoStartChByTarget = {};
+
+function t(key, params) {
+  const dict = I18N[currentLang] || I18N.zh;
+  let str = dict[key] ?? I18N.zh[key] ?? key;
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      str = str.replaceAll('{' + k + '}', String(v));
+    }
+  }
+  return str;
+}
+
+function setLang(lang) {
+  currentLang = (lang === 'en') ? 'en' : 'zh';
+  try { localStorage.setItem('tsl2nmos_lang', currentLang); } catch (_) {}
+  applyLang();
+}
+
+function applyLang() {
+  document.documentElement.lang = (currentLang === 'en') ? 'en' : 'zh-CN';
+  document.title = t('doc_title');
+  document.getElementById('langBtnZh').classList.toggle('active', currentLang === 'zh');
+  document.getElementById('langBtnEn').classList.toggle('active', currentLang === 'en');
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+
+  updateSSEBadge();
+  renderMDNSBox();
+
+  if (latestStatus) {
+    renderStatus(latestStatus);
+  } else {
+    document.getElementById('wsText').textContent = t('ws_badge', {n: 0});
+    document.getElementById('stTslPkts').textContent = t('stat_tsl_pkts', {pkts: 0, msgs: 0, errs: 0});
+    document.getElementById('stWsClients').textContent = t('stat_ws_clients', {n: 0});
+    document.getElementById('stUptime').textContent = t('stat_uptime', {t: '0h 0m 0s'});
+    renderWSClients([]);
+  }
+  if (appConfig) {
+    renderChannelsCfgTable();
+    renderTargetsSection(true);
+  }
+  renderSnifferTable();
+}
+
+function updateSSEBadge() {
+  const dot = document.getElementById('sseDot');
+  const txt = document.getElementById('sseText');
+  if (sseState === 'online') {
+    dot.className = 'dot ok';
+    txt.textContent = t('sse_online');
+  } else if (sseState === 'reconnecting') {
+    dot.className = 'dot err';
+    txt.textContent = t('sse_reconnecting');
+  } else {
+    dot.className = 'dot';
+    txt.textContent = t('sse_connecting');
+  }
+}
+
+function showToast(msg, isErr) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = isErr ? '#da3633' : '#1f6feb';
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 2800);
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  const isDirty = document.getElementById('cfgDirtyHint')?.style.display !== 'none';
+  if ((name === 'channels' || name === 'targets') && (!appConfig || !isDirty)) {
+    loadConfig();
+  }
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  return data;
+}
+
+function renderStatus(st) {
+  latestStatus = st;
+  document.getElementById('hdrEndpoints').textContent = `Node: ${st.node_id.slice(0,8)}… | HTTP: ${st.advertised_http}`;
+
+  const tslConn = (currentLang === 'en' ? (st.tsl_stats.connection_state_en || st.tsl_stats.connection_state) : st.tsl_stats.connection_state) || st.tsl_stats.listen_addr;
+  document.getElementById('stTslAddr').textContent = tslConn;
+  document.getElementById('stTslPkts').textContent =
+    t('stat_tsl_pkts', {
+      pkts: st.tsl_stats.total_packets,
+      msgs: st.tsl_stats.total_messages,
+      errs: st.tsl_stats.parse_errors
+    }) + (st.tsl_stats.last_source_addr ? t('stat_tsl_src', {src: st.tsl_stats.last_source_addr}) : '');
+
+  document.getElementById('stWsUri').textContent = st.advertised_ws;
+  const wsCount = (st.ws_clients || []).length;
+  document.getElementById('stWsClients').textContent = t('stat_ws_clients', {n: wsCount});
+  document.getElementById('wsText').textContent = t('ws_badge', {n: wsCount});
+  document.getElementById('wsDot').className = 'dot ' + (wsCount > 0 ? 'ok' : '');
+
+  const reg = st.registry_status || {};
+  if (reg.mode === 'disabled') {
+    document.getElementById('stRegState').textContent = t('reg_disabled');
+    document.getElementById('stRegUrl').textContent = t('reg_disabled_sub');
+  } else if (reg.registered) {
+    document.getElementById('stRegState').textContent = t('reg_online');
+    document.getElementById('stRegUrl').textContent = reg.active_registry_url || '';
+  } else {
+    document.getElementById('stRegState').textContent = t('reg_p2p');
+    document.getElementById('stRegUrl').textContent = reg.last_error || t('reg_p2p_sub');
+  }
+
+  const binds = (st.binding_statuses || []).filter(b => b.enabled);
+  const okBinds = binds.filter(b => b.patched).length;
+  document.getElementById('stBindSummary').textContent = binds.length
+    ? t('stat_bind_active', {ok: okBinds, total: binds.length})
+    : t('stat_bind_none');
+  document.getElementById('stUptime').textContent = t('stat_uptime', {t: formatUptime(st.uptime_sec)});
+
+  renderChannels(st.channels || []);
+  renderWSClients(st.ws_clients || []);
+  if (appConfig) renderTargetsSection(false);
+}
+
+function formatUptime(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return `${h}h ${m}m ${s}s`;
+}
+
+function renderChannels(channels) {
+  if (latestStatus) latestStatus.channels = channels;
+  const grid = document.getElementById('matrixGrid');
+  grid.innerHTML = channels.map(ch => {
+    const cls = ['cam-card'];
+    if (ch.effective_red) cls.push('pgm');
+    if (ch.effective_green) cls.push('pvw');
+    const ov = ch.override || 'auto';
+    return `
+      <div class="${cls.join(' ')}">
+        <div class="cam-head">
+          <span class="cam-title">${esc(ch.name)}</span>
+          <span class="cam-idx">${ch.match_all_screens ? 'Scr:*' : 'Scr:'+ch.screen} / Idx:${ch.index}</span>
+        </div>
+        <div class="umd-box">
+          <span>${esc(ch.tsl_label || '—')}</span>
+          <span style="font-size:10.5px;color:#8b949e">LH:${ch.raw_lh[0]} TXT:${ch.raw_text[0]} RH:${ch.raw_rh[0]}</span>
+        </div>
+        <div class="lamps">
+          <div class="lamp ${ch.effective_red ? 'red-on' : ''}">${esc(t('lamp_pgm', {st: ch.effective_red ? 'ON' : 'OFF'}))}</div>
+          <div class="lamp ${ch.effective_green ? 'green-on' : ''}">${esc(t('lamp_pvw', {st: ch.effective_green ? 'ON' : 'OFF'}))}</div>
+        </div>
+        <div class="ov-btns">
+          <button class="${ov==='auto'?'active-ov':''}" onclick="setOverride(${ch.id},'auto')">${esc(t('ov_auto'))}</button>
+          <button class="${ov==='force_red'?'active-ov':''}" onclick="setOverride(${ch.id},'force_red')">${esc(t('ov_red'))}</button>
+          <button class="${ov==='force_green'?'active-ov':''}" onclick="setOverride(${ch.id},'force_green')">${esc(t('ov_green'))}</button>
+          <button class="${ov==='force_both'?'active-ov':''}" onclick="setOverride(${ch.id},'force_both')">${esc(t('ov_both'))}</button>
+          <button class="${ov==='force_off'?'active-ov':''}" onclick="setOverride(${ch.id},'force_off')">${esc(t('ov_off'))}</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderWSClients(list) {
+  const tb = document.getElementById('wsClientsBody');
+  if (!list.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">${esc(t('ws_empty'))}</td></tr>`;
+    return;
+  }
+  tb.innerHTML = list.map(c => `
+    <tr>
+      <td class="mono">${esc(c.remote_addr)}</td>
+      <td>${new Date(c.connected_at).toLocaleTimeString()}</td>
+      <td>${new Date(c.last_health_at).toLocaleTimeString()}</td>
+      <td>${esc(t('ws_subs_count', {n: (c.subscribed_sources || []).length}))}</td>
+    </tr>`).join('');
+}
+
+async function setOverride(channelId, mode) {
+  try {
+    await api('/api/v1/channels/override', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({channel_id: channelId, mode})
+    });
+  } catch (e) { showToast(e.message, true); }
+}
+
+async function loadConfig() {
+  try {
+    appConfig = await api('/api/v1/config');
+    populateConfigForm();
+    renderTargetsSection();
+  } catch (e) { showToast(t('toast_load_cfg_err', {err: e.message}), true); }
+}
+
+function toggleTslModeFields() {
+  const m = document.getElementById('cfgTslMode').value;
+  document.getElementById('fldTslListen').style.display = (m === 'tcp_client') ? 'none' : '';
+  document.getElementById('fldTslRemote').style.display = (m === 'listen') ? 'none' : '';
+}
+
+function markCfgDirty() {
+  const el = document.getElementById('cfgDirtyHint');
+  if (el) el.style.display = 'inline';
+}
+
+function clearCfgDirty() {
+  const el = document.getElementById('cfgDirtyHint');
+  if (el) el.style.display = 'none';
+}
+
+function populateConfigForm() {
+  if (!appConfig) return;
+  clearCfgDirty();
+  document.getElementById('cfgTslMode').value = appConfig.tsl.transport_mode || 'listen';
+  document.getElementById('cfgTslListen').value = appConfig.tsl.listen_addr || '0.0.0.0:8901';
+  document.getElementById('cfgTslRemote').value = appConfig.tsl.remote_addr || '';
+  toggleTslModeFields();
+  document.getElementById('cfgHostIp').value = appConfig.node.host_ip || 'auto';
+  document.getElementById('cfgRuleMode').value = appConfig.tsl.default_rule.mode || 'any_color';
+  document.getElementById('cfgPgmOverPvw').value = String(!!appConfig.tsl.default_rule.pgm_overrides_pvw);
+  document.getElementById('cfgInvRed').value = String(!!appConfig.tsl.default_rule.invert_red);
+  document.getElementById('cfgInvGreen').value = String(!!appConfig.tsl.default_rule.invert_green);
+  document.getElementById('cfgRegMode').value = appConfig.nmos.registry_mode || 'auto';
+  document.getElementById('cfgRegUrl').value = appConfig.nmos.static_registry_url || '';
+  renderChannelsCfgTable();
+}
+
+function renderChannelsCfgTable() {
+  if (!appConfig) return;
+  const snapMap = {};
+  if (latestStatus && latestStatus.channels) {
+    latestStatus.channels.forEach(c => { snapMap[c.id] = c; });
+  }
+  const pendingTxt = esc(t('uuid_pending'));
+  const delTxt = esc(t('btn_delete'));
+  const tb = document.getElementById('channelsCfgBody');
+  tb.innerHTML = (appConfig.channels || []).map((ch, idx) => {
+    const sn = snapMap[ch.id] || {};
+    return `
+      <tr>
+        <td><input type="number" value="${ch.id}" min="1" style="width:70px" oninput="appConfig.channels[${idx}].id=parseInt(this.value)||1;markCfgDirty()" onchange="appConfig.channels[${idx}].id=parseInt(this.value)||1;markCfgDirty()"></td>
+        <td><input type="text" value="${esc(ch.name)}" style="width:130px" oninput="appConfig.channels[${idx}].name=this.value;markCfgDirty()" onchange="appConfig.channels[${idx}].name=this.value;markCfgDirty()"></td>
+        <td><input type="checkbox" ${ch.match_all_screens?'checked':''} onchange="appConfig.channels[${idx}].match_all_screens=this.checked;markCfgDirty()"></td>
+        <td><input type="number" value="${ch.screen}" min="0" max="65535" style="width:85px" oninput="appConfig.channels[${idx}].screen=parseInt(this.value)||0;markCfgDirty()" onchange="appConfig.channels[${idx}].screen=parseInt(this.value)||0;markCfgDirty()"></td>
+        <td><input type="number" value="${ch.index}" min="0" max="65535" style="width:95px" oninput="appConfig.channels[${idx}].index=parseInt(this.value)||0;markCfgDirty()" onchange="appConfig.channels[${idx}].index=parseInt(this.value)||0;markCfgDirty()"></td>
+        <td class="mono" style="font-size:11px;color:var(--muted)">
+          R: ${sn.red_source_id || pendingTxt}<br>G: ${sn.green_source_id || pendingTxt}
+        </td>
+        <td><button class="danger" onclick="appConfig.channels.splice(${idx},1);renderChannelsCfgTable();markCfgDirty()">${delTxt}</button></td>
+      </tr>`;
+  }).join('');
+}
+
+function quickAddChannels(count) {
+  if (!appConfig) return;
+  appConfig.channels = [];
+  for (let i = 1; i <= count; i++) {
+    appConfig.channels.push({id: i, name: 'CAM ' + i, screen: 0, match_all_screens: true, index: i});
+  }
+  renderChannelsCfgTable();
+  markCfgDirty();
+}
+
+function addSingleChannel() {
+  if (!appConfig) return;
+  const maxId = (appConfig.channels || []).reduce((m, c) => Math.max(m, c.id), 0);
+  const next = maxId + 1;
+  appConfig.channels.push({id: next, name: 'CAM ' + next, screen: 0, match_all_screens: true, index: next});
+  renderChannelsCfgTable();
+  markCfgDirty();
+}
+
+async function saveFullConfig() {
+  if (!appConfig) return;
+  appConfig.tsl.transport_mode = document.getElementById('cfgTslMode').value;
+  appConfig.tsl.listen_addr = document.getElementById('cfgTslListen').value.trim() || '0.0.0.0:8901';
+  appConfig.tsl.remote_addr = document.getElementById('cfgTslRemote').value.trim();
+  appConfig.node.host_ip = document.getElementById('cfgHostIp').value.trim() || 'auto';
+  appConfig.tsl.default_rule.mode = document.getElementById('cfgRuleMode').value;
+  appConfig.tsl.default_rule.pgm_overrides_pvw = document.getElementById('cfgPgmOverPvw').value === 'true';
+  appConfig.tsl.default_rule.invert_red = document.getElementById('cfgInvRed').value === 'true';
+  appConfig.tsl.default_rule.invert_green = document.getElementById('cfgInvGreen').value === 'true';
+  appConfig.nmos.registry_mode = document.getElementById('cfgRegMode').value;
+  appConfig.nmos.static_registry_url = document.getElementById('cfgRegUrl').value.trim();
+
+  try {
+    appConfig = await api('/api/v1/config', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(appConfig)
+    });
+    showToast(t('toast_cfg_saved'));
+    const st = await api('/api/v1/status');
+    renderStatus(st);
+    populateConfigForm();
+  } catch (e) { showToast(t('toast_save_err', {err: e.message}), true); }
+}
+
+function renderMDNSBox() {
+  const box = document.getElementById('mdnsResult');
+  if (!mdnsScanState) {
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  if (mdnsScanState.type === 'scanning') {
+    box.innerHTML = `<span style="color:var(--muted)">${esc(t('mdns_scanning'))}</span>`;
+  } else if (mdnsScanState.type === 'empty') {
+    box.innerHTML = `<span style="color:var(--muted)">${esc(t('mdns_empty'))}</span>`;
+  } else if (mdnsScanState.type === 'found') {
+    box.innerHTML = esc(t('mdns_found')) + mdnsScanState.nodes.map(n =>
+      `<button style="margin:2px 4px" onclick="document.getElementById('inpTargetUrl').value='${esc(n.base_url)}';document.getElementById('inpTargetLabel').value='${esc(n.instance)}'">${esc(n.instance)} (${esc(n.base_url)})</button>`
+    ).join('');
+  } else if (mdnsScanState.type === 'error') {
+    box.innerHTML = '<span style="color:#ff7b82">' + esc(mdnsScanState.err) + '</span>';
+  }
+}
+
+async function scanMDNSNodes() {
+  mdnsScanState = {type: 'scanning'};
+  renderMDNSBox();
+  try {
+    const nodes = await api('/api/v1/mdns/nodes?scan=1');
+    if (!nodes.length) {
+      mdnsScanState = {type: 'empty'};
+    } else {
+      mdnsScanState = {type: 'found', nodes};
+    }
+  } catch (e) {
+    mdnsScanState = {type: 'error', err: e.message};
+  }
+  renderMDNSBox();
+}
+
+async function addAndInspectTarget() {
+  const rawUrl = document.getElementById('inpTargetUrl').value.trim();
+  const label = document.getElementById('inpTargetLabel').value.trim();
+  if (!rawUrl) return showToast(t('toast_enter_url'), true);
+  if (!appConfig) await loadConfig();
+
+  try {
+    const info = await api('/api/v1/targets/inspect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base_url: rawUrl})
+    });
+    inspectedCache[info.base_url] = info.receivers || [];
+    let existing = (appConfig.direct_targets || []).find(t => t.base_url === info.base_url);
+    if (!existing) {
+      const bindings = (info.receivers || []).map(r => ({
+        receiver_id: r.id,
+        receiver_label: r.label,
+        channel_id: 1,
+        color: 'red',
+        enabled: false
+      }));
+      existing = {
+        id: 'target-' + Date.now(),
+        label: label || info.node_label || info.base_url,
+        base_url: info.base_url,
+        enabled: true,
+        auto_heal_interval_sec: 10,
+        bindings
+      };
+      appConfig.direct_targets = appConfig.direct_targets || [];
+      appConfig.direct_targets.push(existing);
+    } else {
+      syncTargetReceivers(existing, info.receivers || []);
+    }
+    await persistTargetsOnly(t('toast_probed', {n: (info.receivers || []).length}));
+  } catch (e) {
+    showToast(t('toast_probe_err', {err: e.message}), true);
+  }
+}
+
+function syncTargetReceivers(target, receivers) {
+  const byId = {};
+  (target.bindings || []).forEach(b => { byId[b.receiver_id] = b; });
+  target.bindings = receivers.map(r => byId[r.id] || {
+    receiver_id: r.id,
+    receiver_label: r.label,
+    channel_id: 1,
+    color: 'red',
+    enabled: false
+  });
+}
+
+async function refreshTargetInspect(tIdx) {
+  const tgt = appConfig.direct_targets[tIdx];
+  try {
+    const info = await api('/api/v1/targets/inspect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base_url: tgt.base_url})
+    });
+    syncTargetReceivers(tgt, info.receivers || []);
+    renderTargetsSection();
+    showToast(t('toast_refreshed_gpo', {n: info.receivers.length}));
+  } catch (e) { showToast(t('toast_refresh_err', {err: e.message}), true); }
+}
+
+function autoMapDualTally(tIdx) {
+  const tgt = appConfig.direct_targets[tIdx];
+  const channels = appConfig.channels || [];
+  if (!channels.length) return showToast(t('toast_need_ch'), true);
+
+  const selEl = document.getElementById('autoStartCh_' + tIdx);
+  const startChId = selEl ? parseInt(selEl.value) : channels[0].id;
+  autoStartChByTarget[tgt.id] = startChId;
+
+  let startIdx = channels.findIndex(c => c.id === startChId);
+  if (startIdx < 0) startIdx = 0;
+
+  let mappedCount = 0;
+  (tgt.bindings || []).forEach((b, i) => {
+    const chPos = startIdx + Math.floor(i / 2);
+    if (chPos < channels.length) {
+      b.channel_id = channels[chPos].id;
+      b.color = (i % 2 === 0) ? 'red' : 'green';
+      b.enabled = true;
+      mappedCount++;
+    } else {
+      b.enabled = false;
+    }
+  });
+  renderTargetsSection(true);
+  showToast(t('toast_auto_mapped', {
+    id: channels[startIdx].id,
+    name: channels[startIdx].name,
+    n: mappedCount
+  }));
+}
+
+async function persistTargetsOnly(toastMsg) {
+  try {
+    appConfig = await api('/api/v1/config', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(appConfig)
+    });
+    renderTargetsSection(true);
+    showToast(toastMsg || t('toast_patch_saved'));
+  } catch (e) { showToast(t('toast_save_err', {err: e.message}), true); }
+}
+
+async function resyncTargets() {
+  try {
+    await api('/api/v1/targets/resync', {method: 'POST'});
+    showToast(t('toast_resync'));
+  } catch (e) { showToast(e.message, true); }
+}
+
+function renderTargetsSection(force = true) {
+  const container = document.getElementById('targetsContainer');
+  if (!force && document.activeElement && container.contains(document.activeElement)) {
+    return;
+  }
+  if (!appConfig || !(appConfig.direct_targets || []).length) {
+    container.innerHTML = `<div class="card-panel" style="color:var(--muted)">${esc(t('targets_empty'))}</div>`;
+    return;
+  }
+
+  const stMap = {};
+  if (latestStatus && latestStatus.binding_statuses) {
+    latestStatus.binding_statuses.forEach(s => { stMap[s.target_id + '|' + s.receiver_id] = s; });
+  }
+  const channels = appConfig.channels || [];
+
+  container.innerHTML = appConfig.direct_targets.map((tgt, tIdx) => {
+    const defaultStartId = channels.length ? channels[0].id : 1;
+    const selStartId = autoStartChByTarget[tgt.id] || defaultStartId;
+    const startOpts = channels.map(c =>
+      `<option value="${c.id}" ${c.id===selStartId?'selected':''}>${esc(t('opt_start_ch', {id: c.id, name: c.name}))}</option>`
+    ).join('');
+
+    const rows = (tgt.bindings || []).map((b, bIdx) => {
+      const rt = stMap[tgt.id + '|' + b.receiver_id] || {};
+      let statusHtml = `<span style="color:var(--muted)">${esc(t('st_disabled'))}</span>`;
+      if (tgt.enabled && b.enabled) {
+        if (rt.patched) statusHtml = `<span style="color:var(--tally-green);font-weight:700">${esc(t('st_patched'))}</span>`;
+        else if (rt.last_error) statusHtml = `<span style="color:var(--tally-red)" title="${esc(rt.last_error)}">✖ ${esc(rt.last_error.slice(0,42))}</span>`;
+        else statusHtml = `<span style="color:var(--warn)">${esc(t('st_patching'))}</span>`;
+      }
+      const chOpts = channels.map(c => `<option value="${c.id}" ${c.id===b.channel_id?'selected':''}>#${c.id} ${esc(c.name)} (Idx:${c.index})</option>`).join('');
+      return `
+        <tr>
+          <td><input type="checkbox" ${b.enabled?'checked':''} onchange="appConfig.direct_targets[${tIdx}].bindings[${bIdx}].enabled=this.checked"></td>
+          <td><b>${esc(b.receiver_label || 'GPO')}</b><div class="mono" style="font-size:11px;color:var(--muted)">${esc(b.receiver_id)}</div></td>
+          <td><select onchange="appConfig.direct_targets[${tIdx}].bindings[${bIdx}].channel_id=parseInt(this.value)">${chOpts}</select></td>
+          <td>
+            <select onchange="appConfig.direct_targets[${tIdx}].bindings[${bIdx}].color=this.value">
+              <option value="red" ${b.color==='red'?'selected':''}>${esc(t('opt_color_red'))}</option>
+              <option value="green" ${b.color==='green'?'selected':''}>${esc(t('opt_color_green'))}</option>
+            </select>
+          </td>
+          <td>${statusHtml}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="card-panel">
+        <h2>
+          <span>
+            <input type="checkbox" ${tgt.enabled?'checked':''} onchange="appConfig.direct_targets[${tIdx}].enabled=this.checked">
+            ${esc(tgt.label)} <span class="mono" style="color:var(--muted);font-weight:400">(${esc(tgt.base_url)})</span>
+          </span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select id="autoStartCh_${tIdx}" onchange="autoStartChByTarget['${esc(tgt.id)}']=parseInt(this.value)">${startOpts}</select>
+            <button onclick="autoMapDualTally(${tIdx})">${esc(t('btn_auto_map'))}</button>
+            <button onclick="refreshTargetInspect(${tIdx})">${esc(t('btn_rescan_gpo'))}</button>
+            <button class="danger" onclick="appConfig.direct_targets.splice(${tIdx},1);persistTargetsOnly(t('toast_target_removed'))">${esc(t('btn_delete_target'))}</button>
+            <button class="primary" onclick="persistTargetsOnly()">${esc(t('btn_save_patch'))}</button>
+          </div>
+        </h2>
+        <table>
+          <thead><tr><th style="width:65px">${esc(t('th_enable'))}</th><th>${esc(t('th_gpo_port'))}</th><th>${esc(t('th_bound_ch'))}</th><th>${esc(t('th_tally_color'))}</th><th>${esc(t('th_is05_status'))}</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+}
+
+async function sendSimTSL() {
+  try {
+    await api('/api/v1/tsl/simulate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        screen: parseInt(document.getElementById('simScreen').value) || 0,
+        index: parseInt(document.getElementById('simIndex').value) || 0,
+        rh_tally: parseInt(document.getElementById('simRH').value) || 0,
+        text_tally: parseInt(document.getElementById('simTextTally').value) || 0,
+        lh_tally: parseInt(document.getElementById('simLH').value) || 0,
+        text: document.getElementById('simLabel').value
+      })
+    });
+    showToast(t('toast_sim_sent'));
+  } catch (e) { showToast(e.message, true); }
+}
+
+function pushSnifferRow(pkt) {
+  snifferRows.unshift(pkt);
+  if (snifferRows.length > 100) snifferRows.length = 100;
+  renderSnifferTable();
+}
+
+function clearSnifferTable() {
+  snifferRows = [];
+  renderSnifferTable();
+}
+
+function renderSnifferTable() {
+  const tb = document.getElementById('snifferBody');
+  if (!snifferRows.length) {
+    tb.innerHTML = `<tr><td colspan="9" style="color:var(--muted)">${esc(t('sniff_empty'))}</td></tr>`;
+    return;
+  }
+  tb.innerHTML = snifferRows.map(r => `
+    <tr>
+      <td class="mono">${new Date(r.timestamp).toLocaleTimeString()}</td>
+      <td class="mono">${esc(r.source_addr)}</td>
+      <td>${r.screen}</td>
+      <td><b>${r.index}</b></td>
+      <td><span class="tag-pill tag-${r.rh_tally}">${r.rh_tally}</span></td>
+      <td><span class="tag-pill tag-${r.text_tally}">${r.text_tally}</span></td>
+      <td><span class="tag-pill tag-${r.lh_tally}">${r.lh_tally}</span></td>
+      <td class="mono">${esc(r.text || '')}</td>
+      <td>${r.was_framed ? 'DLE/STX' : 'Raw UDP'}</td>
+    </tr>`).join('');
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function connectSSE() {
+  const es = new EventSource('/api/v1/stream');
+  es.onopen = () => {
+    sseState = 'online';
+    updateSSEBadge();
+  };
+  es.onerror = () => {
+    sseState = 'reconnecting';
+    updateSSEBadge();
+  };
+  es.addEventListener('status', e => renderStatus(JSON.parse(e.data)));
+  es.addEventListener('channels', e => renderChannels(JSON.parse(e.data)));
+  es.addEventListener('sniffer', e => pushSnifferRow(JSON.parse(e.data)));
+}
+
+(async function init() {
+  applyLang();
+  try {
+    const [st, sniff, cfg] = await Promise.all([
+      api('/api/v1/status'),
+      api('/api/v1/sniffer'),
+      api('/api/v1/config')
+    ]);
+    appConfig = cfg;
+    snifferRows = (sniff || []).reverse();
+    renderStatus(st);
+    renderSnifferTable();
+    populateConfigForm();
+  } catch (e) { console.error(e); }
+  connectSSE();
+})();
+</script>
+</body>
+</html>
