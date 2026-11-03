@@ -930,11 +930,12 @@ function renderChannels(channels) {
 
 function renderWSClients(list) {
   const tb = document.getElementById('wsClientsBody');
-  if (!list.length) {
+  const arr = Array.isArray(list) ? list : [];
+  if (!arr.length) {
     tb.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">${esc(t('ws_empty'))}</td></tr>`;
     return;
   }
-  tb.innerHTML = list.map(c => `
+  tb.innerHTML = arr.map(c => `
     <tr>
       <td class="mono">${esc(c.remote_addr)}</td>
       <td>${new Date(c.connected_at).toLocaleTimeString()}</td>
@@ -1089,7 +1090,8 @@ async function scanMDNSNodes() {
   mdnsScanState = {type: 'scanning'};
   renderMDNSBox();
   try {
-    const nodes = await api('/api/v1/mdns/nodes?scan=1');
+    const rawNodes = await api('/api/v1/mdns/nodes?scan=1');
+    const nodes = Array.isArray(rawNodes) ? rawNodes : [];
     if (!nodes.length) {
       mdnsScanState = {type: 'empty'};
     } else {
@@ -1164,7 +1166,7 @@ async function refreshTargetInspect(tIdx) {
     });
     syncTargetReceivers(tgt, info.receivers || []);
     renderTargetsSection();
-    showToast(t('toast_refreshed_gpo', {n: info.receivers.length}));
+    showToast(t('toast_refreshed_gpo', {n: (info.receivers || []).length}));
   } catch (e) { showToast(t('toast_refresh_err', {err: e.message}), true); }
 }
 

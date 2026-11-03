@@ -156,7 +156,7 @@ func (m *MDNSService) DiscoveredRegistries() []DiscoveredService {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var list []DiscoveredService
+	list := make([]DiscoveredService, 0)
 	cutoff := time.Now().Add(-2 * time.Minute)
 	for _, svc := range m.discovered {
 		if svc.Service == serviceNMOSReg && svc.SeenAt.After(cutoff) && svc.IP != "" && svc.Port > 0 {
@@ -175,7 +175,7 @@ func (m *MDNSService) DiscoveredNodes() []DiscoveredService {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var list []DiscoveredService
+	list := make([]DiscoveredService, 0)
 	cutoff := time.Now().Add(-5 * time.Minute)
 	for _, svc := range m.discovered {
 		if svc.Service != serviceNMOSNode || svc.SeenAt.Before(cutoff) {
