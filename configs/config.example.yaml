@@ -115,3 +115,43 @@ direct_targets: []
 #         channel_id: 1
 #         color: "green"
 #         enabled: true
+
+# ==============================================================================
+# 反向网关配置：NMOS IS-07 Boolean GPI 输入 -> TSL UMD v5.0 / v3.1 输出
+# 典型场景：采集 Riedel StageLink NSA-010C 的 16 路闲置 GPInput 物理干接点，
+# 实时编码为 TSL 5.0 UDP 发送给 SimplyLive ViBox 的 TSL_Input (默认端口 9001)
+# ==============================================================================
+nmos_to_tsl:
+  output:
+    enabled: false
+    # 输出传输协议: "udp" (SimplyLive TSL_Input 推荐), "tcp_client", "tcp_server"
+    transport: "udp"
+    target_addr: "192.168.42.15:9001"
+    # TSL 版本: "v5.0" (推荐) 或 "v3.1" (18字节定长)
+    protocol: "v5.0"
+    use_dle_framing: false
+    utf16: false
+    # 灯位编码: "lh_red_rh_green" (SimplyLive 标准左红右绿), "rh_red_lh_green", "both_color"
+    lamp_mapping: "lh_red_rh_green"
+    text_follows_tally: false
+    brightness: 3
+    repeat_interval_ms: 1000
+  # 是否向 NMOS IS-04/IS-05 同步暴露虚拟 Receiver 供外部广播控制器路由
+  expose_is04_receivers: true
+  direct_sources: []
+  # 示例：
+  # direct_sources:
+  #   - id: "nsa-010c-gpi"
+  #     label: "Riedel-NSA-010C GPI Input"
+  #     base_url: "http://192.168.42.59:4450"
+  #     enabled: true
+  #     bindings:
+  #       - id: "nsa-gpi-1"
+  #         sender_id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+  #         sender_label: "GPInput 1 (ws)"
+  #         screen: 0
+  #         index: 0
+  #         role: "red"
+  #         umd_text: "CAM 1"
+  #         invert: false
+  #         enabled: true

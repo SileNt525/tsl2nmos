@@ -121,6 +121,30 @@ type SenderResource struct {
 	Subscription      SenderSubscription  `json:"subscription"`
 }
 
+type ReceiverCaps struct {
+	MediaTypes []string `json:"media_types"`
+	EventTypes []string `json:"event_types,omitempty"`
+}
+
+type ReceiverSubscription struct {
+	SenderID *string `json:"sender_id"`
+	Active   bool    `json:"active"`
+}
+
+type ReceiverResource struct {
+	ID                string               `json:"id"`
+	Version           string               `json:"version"`
+	Label             string               `json:"label"`
+	Description       string               `json:"description"`
+	Tags              map[string][]string  `json:"tags"`
+	DeviceID          string               `json:"device_id"`
+	Format            string               `json:"format"`
+	Transport         string               `json:"transport"`
+	InterfaceBindings []string             `json:"interface_bindings"`
+	Caps              ReceiverCaps         `json:"caps"`
+	Subscription      ReceiverSubscription `json:"subscription"`
+}
+
 // --- IS-05 v1.1 Connection Management Models ---
 
 type ActivationParams struct {
@@ -143,6 +167,26 @@ type SenderConnectionState struct {
 	MasterEnable    bool                       `json:"master_enable"`
 	Activation      ActivationParams           `json:"activation"`
 	TransportParams []WebSocketTransportParams `json:"transport_params"`
+}
+
+type TransportFileState struct {
+	Data *string `json:"data"`
+	Type *string `json:"type"`
+}
+
+type ReceiverWebSocketParams struct {
+	ConnectionAuthorization any     `json:"connection_authorization"`
+	ConnectionURI           *string `json:"connection_uri"`
+	ExtIS07RestAPIURL       *string `json:"ext_is_07_rest_api_url"`
+	ExtIS07SourceID         *string `json:"ext_is_07_source_id"`
+}
+
+type ReceiverConnectionState struct {
+	SenderID        *string                   `json:"sender_id"`
+	MasterEnable    bool                      `json:"master_enable"`
+	Activation      ActivationParams          `json:"activation"`
+	TransportFile   TransportFileState        `json:"transport_file"`
+	TransportParams []ReceiverWebSocketParams `json:"transport_params"`
 }
 
 type SenderPatchRequest struct {

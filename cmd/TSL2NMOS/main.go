@@ -17,6 +17,7 @@ import (
 	"tsl2nmos/internal/config"
 	"tsl2nmos/internal/controller"
 	"tsl2nmos/internal/nmos"
+	"tsl2nmos/internal/nmos2tsl"
 	"tsl2nmos/internal/tally"
 	"tsl2nmos/internal/tsl"
 	"tsl2nmos/internal/web"
@@ -127,9 +128,17 @@ func main() {
 	})
 	regCli.Start(ctx)
 
-	// 5. Start Direct IS-05 Receiver Patcher (for Riedel StageLink NSA-010C standalone/hybrid operation).
+	// 5. Start Direct IS-05 Receiver Patcher (for Riedel StageLink NSA-010C GPO standalone/hybrid operation).
 	patcher := controller.NewDirectPatcher(cfgMgr, store, logger)
 	patcher.Start(ctx)
+
+	// 5b. Start reverse NMOS IS-07 GPI -> TSL UMD v5.0 / v3.1 Bridge & Transmitter (e.g., NSA-010C GPIs -> SimplyLive TSL_Input).
+	tslTx := tsl.NewTransmitter(cfg.NMOSToTSL.Output, logger)
+	n2tBridge := nmos2tsl.NewBridge(cfgMgr, store, tslTx, logger)
+	store.SetOnReceiverChange(func() {
+		n2tBridge.TriggerSync()
+	})
+	_ = n2tBridge.Start(ctx)
 
 	// 6. Start TSL 5.0 transport listener / active connector.
 	tslListener := tsl.NewListener(cfg.TSL.ListenAddr, engine.HandlePacket, logger)
@@ -151,12 +160,18 @@ func main() {
 		})
 		regCli.UpdateConfig(newCfg.NMOS)
 		patcher.TriggerSync()
-		logger.Info("配置已完成热重载", "channels", len(newCfg.Channels), "direct_targets", len(newCfg.DirectTargets))
+		n2tBridge.Reload(newCfg)
+		logger.Info("配置已完成热重载",
+			"channels", len(newCfg.Channels),
+			"direct_targets", len(newCfg.DirectTargets),
+			"nmos2tsl_sources", len(newCfg.NMOSToTSL.DirectSources),
+		)
 	}
 
 	mux := http.NewServeMux()
 	nmos.RegisterRoutes(mux, store, wsHub)
 	webSrv := web.NewServer(cfgMgr, tslListener, engine, store, wsHub, regCli, mdnsSvc, patcher, onReload, logger)
+	webSrv.SetNMOS2TSLBridge(n2tBridge)
 	webSrv.RegisterRoutes(mux)
 
 	httpListenAddr := net.JoinHostPort(cfg.Node.BindAddr, fmt.Sprintf("%d", cfg.Node.HTTPPort))

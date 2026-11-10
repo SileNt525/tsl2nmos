@@ -158,9 +158,16 @@ func handleIS04Node(w http.ResponseWriter, r *http.Request, parts []string, stor
 		writeNMOSError(w, http.StatusNotFound, "sender not found")
 
 	case "receivers":
+		receivers := store.SnapshotReceivers()
 		if resourceID == "" {
-			writeJSON(w, http.StatusOK, []any{})
+			writeJSON(w, http.StatusOK, receivers)
 			return
+		}
+		for _, rcv := range receivers {
+			if rcv.ID == resourceID {
+				writeJSON(w, http.StatusOK, rcv)
+				return
+			}
 		}
 		writeNMOSError(w, http.StatusNotFound, "receiver not found")
 
@@ -206,11 +213,91 @@ func handleIS05Single(w http.ResponseWriter, r *http.Request, ver string, parts 
 
 	switch parts[0] {
 	case "receivers":
-		if len(parts) == 1 && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-			writeJSON(w, http.StatusOK, []string{})
+		if len(parts) == 1 {
+			if r.Method != http.MethodGet && r.Method != http.MethodHead {
+				writeNMOSError(w, http.StatusMethodNotAllowed, "method not allowed")
+				return
+			}
+			rcvs := store.SnapshotReceivers()
+			ids := make([]string, 0, len(rcvs))
+			for _, rcv := range rcvs {
+				ids = append(ids, rcv.ID+"/")
+			}
+			writeJSON(w, http.StatusOK, ids)
 			return
 		}
-		writeNMOSError(w, http.StatusNotFound, "receiver not found")
+
+		receiverID := parts[1]
+		if len(parts) == 2 {
+			if !store.hasReceiver(receiverID) {
+				writeNMOSError(w, http.StatusNotFound, "receiver not found")
+				return
+			}
+			subRoutes := []string{"constraints/", "staged/", "active/"}
+			if ver == "v1.1" {
+				subRoutes = append(subRoutes, "transporttype/")
+			}
+			writeJSON(w, http.StatusOK, subRoutes)
+			return
+		}
+
+		if len(parts) > 3 {
+			writeNMOSError(w, http.StatusNotFound, "not found")
+			return
+		}
+
+		switch parts[2] {
+		case "constraints":
+			c, ok := store.getReceiverConstraints(receiverID)
+			if !ok {
+				writeNMOSError(w, http.StatusNotFound, "receiver not found")
+				return
+			}
+			writeJSON(w, http.StatusOK, c)
+
+		case "staged":
+			switch r.Method {
+			case http.MethodGet, http.MethodHead:
+				st, ok := store.getReceiverStaged(receiverID)
+				if !ok {
+					writeNMOSError(w, http.StatusNotFound, "receiver not found")
+					return
+				}
+				writeJSON(w, http.StatusOK, st)
+			case http.MethodPatch:
+				body, err := io.ReadAll(io.LimitReader(r.Body, 65536))
+				if err != nil {
+					writeNMOSError(w, http.StatusBadRequest, "failed to read body")
+					return
+				}
+				resp, code, errMsg := store.patchReceiverStaged(receiverID, body)
+				if code != http.StatusOK && code != http.StatusAccepted {
+					writeNMOSError(w, code, errMsg)
+					return
+				}
+				writeJSON(w, code, resp)
+			default:
+				writeNMOSError(w, http.StatusMethodNotAllowed, "method not allowed")
+			}
+
+		case "active":
+			act, ok := store.getReceiverActive(receiverID)
+			if !ok {
+				writeNMOSError(w, http.StatusNotFound, "receiver not found")
+				return
+			}
+			writeJSON(w, http.StatusOK, act)
+
+		case "transporttype":
+			if ver != "v1.1" || !store.hasReceiver(receiverID) {
+				writeNMOSError(w, http.StatusNotFound, "not found")
+				return
+			}
+			writeJSON(w, http.StatusOK, TransportWebsocket)
+
+		default:
+			writeNMOSError(w, http.StatusNotFound, "not found")
+		}
 
 	case "senders":
 		if len(parts) == 1 {
@@ -325,15 +412,26 @@ func handleIS05Bulk(w http.ResponseWriter, r *http.Request, parts []string, stor
 
 	switch parts[0] {
 	case "receivers":
-		if r.Method == http.MethodGet {
-			writeNMOSError(w, http.StatusMethodNotAllowed, "GET not supported on bulk endpoint")
+		if r.Method != http.MethodPost {
+			writeNMOSError(w, http.StatusMethodNotAllowed, "only POST is supported on bulk/receivers")
 			return
 		}
-		if r.Method == http.MethodPost {
-			writeJSON(w, http.StatusOK, []BulkResponseItem{})
+		var reqs []BulkSenderItem
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&reqs); err != nil {
+			writeNMOSError(w, http.StatusBadRequest, "invalid JSON array: "+err.Error())
 			return
 		}
-		writeNMOSError(w, http.StatusMethodNotAllowed, "method not allowed")
+		results := make([]BulkResponseItem, 0, len(reqs))
+		for _, item := range reqs {
+			rawParams, _ := json.Marshal(item.Params)
+			_, code, errMsg := store.patchReceiverStaged(item.ID, rawParams)
+			results = append(results, BulkResponseItem{
+				ID:    item.ID,
+				Code:  code,
+				Error: errMsg,
+			})
+		}
+		writeJSON(w, http.StatusOK, results)
 
 	case "senders":
 		if r.Method != http.MethodPost {
@@ -640,6 +738,208 @@ func (s *Store) patchSenderStaged(senderID string, rawJSON []byte) (SenderConnec
 	default:
 		s.mu.Unlock()
 		return SenderConnectionState{}, http.StatusBadRequest, "unsupported activation mode: " + actMode
+	}
+}
+
+func (s *Store) hasReceiver(receiverID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.byReceiverID[receiverID]
+	return ok
+}
+
+func (s *Store) getReceiverConstraints(receiverID string) ([]map[string]ConstraintRule, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.byReceiverID[receiverID]; !ok {
+		return nil, false
+	}
+	c := []map[string]ConstraintRule{
+		{
+			"connection_authorization": {Enum: []any{false}},
+			"connection_uri":           {},
+			"ext_is_07_rest_api_url":   {},
+			"ext_is_07_source_id":      {},
+		},
+	}
+	return c, true
+}
+
+func (s *Store) getReceiverStaged(receiverID string) (ReceiverConnectionState, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.byReceiverID[receiverID]
+	if !ok {
+		return ReceiverConnectionState{}, false
+	}
+	return cloneReceiverConnState(entry.Staged), true
+}
+
+func (s *Store) getReceiverActive(receiverID string) (ReceiverConnectionState, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.byReceiverID[receiverID]
+	if !ok {
+		return ReceiverConnectionState{}, false
+	}
+	return cloneReceiverConnState(entry.Active), true
+}
+
+func (s *Store) patchReceiverStaged(receiverID string, rawJSON []byte) (ReceiverConnectionState, int, string) {
+	var rawMap map[string]json.RawMessage
+	if err := json.Unmarshal(rawJSON, &rawMap); err != nil {
+		return ReceiverConnectionState{}, http.StatusBadRequest, "invalid JSON: " + err.Error()
+	}
+
+	s.mu.Lock()
+	entry, ok := s.byReceiverID[receiverID]
+	if !ok {
+		s.mu.Unlock()
+		return ReceiverConnectionState{}, http.StatusNotFound, "receiver not found"
+	}
+
+	nextStaged := cloneReceiverConnState(entry.Staged)
+
+	if rawSnd, present := rawMap["sender_id"]; present {
+		if bytes.Equal(bytes.TrimSpace(rawSnd), []byte("null")) {
+			nextStaged.SenderID = nil
+		} else {
+			var sid string
+			if err := json.Unmarshal(rawSnd, &sid); err != nil {
+				s.mu.Unlock()
+				return ReceiverConnectionState{}, http.StatusBadRequest, "invalid sender_id"
+			}
+			nextStaged.SenderID = &sid
+		}
+	}
+
+	if rawME, present := rawMap["master_enable"]; present {
+		var me bool
+		if err := json.Unmarshal(rawME, &me); err != nil {
+			s.mu.Unlock()
+			return ReceiverConnectionState{}, http.StatusBadRequest, "invalid master_enable"
+		}
+		nextStaged.MasterEnable = me
+	}
+
+	if rawTP, present := rawMap["transport_params"]; present {
+		var tps []ReceiverWebSocketParams
+		if err := json.Unmarshal(rawTP, &tps); err != nil || len(tps) == 0 {
+			s.mu.Unlock()
+			return ReceiverConnectionState{}, http.StatusBadRequest, "invalid transport_params"
+		}
+		resolved := tps[0]
+		if resolved.ConnectionAuthorization == nil || resolved.ConnectionAuthorization == "auto" {
+			resolved.ConnectionAuthorization = false
+		}
+		nextStaged.TransportParams = []ReceiverWebSocketParams{resolved}
+	}
+
+	var actMode string
+	var reqTimeStr string
+	if rawAct, present := rawMap["activation"]; present && !bytes.Equal(bytes.TrimSpace(rawAct), []byte("null")) {
+		var act ActivationParams
+		if err := json.Unmarshal(rawAct, &act); err != nil {
+			s.mu.Unlock()
+			return ReceiverConnectionState{}, http.StatusBadRequest, "invalid activation object"
+		}
+		if act.Mode != nil {
+			actMode = *act.Mode
+		}
+		if act.RequestedTime != nil {
+			reqTimeStr = *act.RequestedTime
+		}
+		nextStaged.Activation = act
+	} else {
+		nextStaged.Activation = ActivationParams{Mode: nil, RequestedTime: nil}
+	}
+
+	switch actMode {
+	case "":
+		entry.Staged = nextStaged
+		resp := cloneReceiverConnState(entry.Staged)
+		s.mu.Unlock()
+		return resp, http.StatusOK, ""
+
+	case "activate_immediate":
+		nowTAI := TAITimestampNow()
+		nextStaged.Activation = ActivationParams{Mode: nil, RequestedTime: nil}
+		entry.Staged = cloneReceiverConnState(nextStaged)
+
+		nextActive := cloneReceiverConnState(nextStaged)
+		modeCp := "activate_immediate"
+		nextActive.Activation = ActivationParams{
+			Mode:           &modeCp,
+			RequestedTime:  nil,
+			ActivationTime: &nowTAI,
+		}
+		entry.Active = nextActive
+		entry.ExternalControlled = nextActive.MasterEnable
+		entry.Receiver.Subscription.SenderID = nextActive.SenderID
+		entry.Receiver.Subscription.Active = nextActive.MasterEnable
+		entry.Receiver.Version = nowTAI
+		s.verRcv++
+
+		resp := cloneReceiverConnState(entry.Staged)
+		resp.Activation.Mode = &modeCp
+		resp.Activation.ActivationTime = &nowTAI
+		resCb := s.onResourceChange
+		rcvCb := s.onReceiverChange
+		s.mu.Unlock()
+		if resCb != nil {
+			resCb()
+		}
+		if rcvCb != nil {
+			rcvCb()
+		}
+		return resp, http.StatusOK, ""
+
+	case "activate_scheduled_relative", "activate_scheduled_absolute":
+		delay := parseScheduledDelay(actMode, reqTimeStr)
+		scheduledAt := time.Now().Add(delay)
+		schedTAI := FormatTAITimestamp(scheduledAt)
+		modeCp := actMode
+		reqCp := reqTimeStr
+		nextStaged.Activation = ActivationParams{
+			Mode:           &modeCp,
+			RequestedTime:  &reqCp,
+			ActivationTime: &schedTAI,
+		}
+		entry.Staged = cloneReceiverConnState(nextStaged)
+		resp := cloneReceiverConnState(entry.Staged)
+		s.mu.Unlock()
+
+		time.AfterFunc(delay, func() {
+			s.mu.Lock()
+			e, exists := s.byReceiverID[receiverID]
+			if !exists {
+				s.mu.Unlock()
+				return
+			}
+			actNow := TAITimestampNow()
+			e.Active = cloneReceiverConnState(e.Staged)
+			e.Active.Activation.ActivationTime = &actNow
+			e.ExternalControlled = e.Active.MasterEnable
+			e.Staged.Activation = ActivationParams{Mode: nil, RequestedTime: nil}
+			e.Receiver.Subscription.SenderID = e.Active.SenderID
+			e.Receiver.Subscription.Active = e.Active.MasterEnable
+			e.Receiver.Version = actNow
+			s.verRcv++
+			resCb := s.onResourceChange
+			rcvCb := s.onReceiverChange
+			s.mu.Unlock()
+			if resCb != nil {
+				resCb()
+			}
+			if rcvCb != nil {
+				rcvCb()
+			}
+		})
+		return resp, http.StatusAccepted, ""
+
+	default:
+		s.mu.Unlock()
+		return ReceiverConnectionState{}, http.StatusBadRequest, "unsupported activation mode: " + actMode
 	}
 }
 

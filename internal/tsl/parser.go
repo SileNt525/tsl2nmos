@@ -392,6 +392,37 @@ func MarshalSControlKeepalive() []byte {
 	return raw
 }
 
+// MarshalV31Packet encodes a single DMSG into a standard 18-byte TSL UMD v3.1 message
+// (Byte 0 = 0x80 | address, Byte 1 = Tally1..3 + Brightness, Bytes 2..17 = 16-char ASCII label).
+func MarshalV31Packet(msg DMSG) [18]byte {
+	var pkt [18]byte
+	pkt[0] = 0x80 | uint8(msg.Index&0x7F)
+	var ctrl uint8
+	if msg.RHTally != LampOff {
+		ctrl |= 0x01 // Tally 1
+	}
+	if msg.LHTally != LampOff {
+		ctrl |= 0x02 // Tally 2
+	}
+	if msg.TextTally != LampOff {
+		ctrl |= 0x04 // Tally 3
+	}
+	ctrl |= (msg.Brightness & 0x03) << 4
+	pkt[1] = ctrl
+
+	for i := 2; i < 18; i++ {
+		pkt[i] = ' '
+	}
+	for i := 0; i < len(msg.Text) && i < 16; i++ {
+		b := msg.Text[i]
+		if b < 0x20 || b > 0x7E {
+			b = '?'
+		}
+		pkt[2+i] = b
+	}
+	return pkt
+}
+
 // StreamDecoder reassembles continuous TCP byte streams into discrete TSL 5.0 Packets with zero
 // 1-packet lag. It handles arbitrary TCP chunk boundaries (half-packets and sticky multi-packets)
 // for both standard DLE/STX (0xFE 0x02) byte-stuffed TCP streams and raw PBC-prefixed streams.

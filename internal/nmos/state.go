@@ -29,6 +29,15 @@ type TallyFlowEntry struct {
 	LastTiming   string
 }
 
+// ReceiverEntry links an NMOS -> TSL GPI binding slot to its IS-04 Receiver and IS-05 connection state.
+type ReceiverEntry struct {
+	BindingID          string
+	Receiver           ReceiverResource
+	Staged             ReceiverConnectionState
+	Active             ReceiverConnectionState
+	ExternalControlled bool
+}
+
 // Store holds the authoritative NMOS IS-04, IS-05, and IS-07 resource state.
 type Store struct {
 	mu sync.RWMutex
@@ -43,10 +52,12 @@ type Store struct {
 	device DeviceResource
 
 	// Keyed by SourceID and SenderID for O(1) lookup in REST & WebSocket handlers.
-	bySourceID map[string]*TallyFlowEntry
-	bySenderID map[string]*TallyFlowEntry
-	byFlowID   map[string]*TallyFlowEntry
-	ordered    []*TallyFlowEntry
+	bySourceID       map[string]*TallyFlowEntry
+	bySenderID       map[string]*TallyFlowEntry
+	byFlowID         map[string]*TallyFlowEntry
+	ordered          []*TallyFlowEntry
+	byReceiverID     map[string]*ReceiverEntry
+	orderedReceivers []*ReceiverEntry
 
 	// Monotonic 0..255 version counters for IS-04 mDNS TXT records (ver_slf, ver_src, etc.).
 	verSlf uint8
@@ -57,6 +68,12 @@ type Store struct {
 	verRcv uint8
 
 	onResourceChange func()
+	onReceiverChange func()
+}
+
+// GPIReceiverID deterministically computes the IS-04 Receiver UUID for an NMOS -> TSL binding slot.
+func GPIReceiverID(nodeSeed, bindingID string) string {
+	return DeterministicUUIDv5(nodeSeed, "receiver:nmos2tsl:"+bindingID)
 }
 
 // ChannelSourceID deterministically computes the Source UUID for (nodeSeed, channelID, color).
@@ -77,9 +94,10 @@ func ChannelSenderID(nodeSeed string, channelID int, color tally.Color) string {
 // NewStore builds the initial NMOS Store from Config.
 func NewStore(cfg config.Config) *Store {
 	s := &Store{
-		bySourceID: make(map[string]*TallyFlowEntry),
-		bySenderID: make(map[string]*TallyFlowEntry),
-		byFlowID:   make(map[string]*TallyFlowEntry),
+		bySourceID:   make(map[string]*TallyFlowEntry),
+		bySenderID:   make(map[string]*TallyFlowEntry),
+		byFlowID:     make(map[string]*TallyFlowEntry),
+		byReceiverID: make(map[string]*ReceiverEntry),
 	}
 	s.RebuildFromConfig(cfg, nil)
 	return s
@@ -91,6 +109,13 @@ func (s *Store) SetOnResourceChange(fn func()) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onResourceChange = fn
+}
+
+// SetOnReceiverChange registers a hook triggered when an external IS-05 Controller patches a local Receiver.
+func (s *Store) SetOnReceiverChange(fn func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onReceiverChange = fn
 }
 
 // RebuildFromConfig updates Node, Device, Sources, Flows, and Senders while preserving active
@@ -106,6 +131,7 @@ func (s *Store) RebuildFromConfig(cfg config.Config, initialValueFn func(chID in
 
 	s.mu.Lock()
 	prevSenders := s.bySenderID
+	prevReceivers := s.byReceiverID
 
 	s.nodeSeed = cfg.Node.IDSeed
 	s.hostIP = hostIP
@@ -291,6 +317,81 @@ func (s *Store) RebuildFromConfig(cfg config.Config, initialValueFn func(chID in
 		}
 	}
 
+	newByReceiver := make(map[string]*ReceiverEntry)
+	orderedReceivers := make([]*ReceiverEntry, 0)
+	receiverIDs := make([]string, 0)
+
+	if cfg.NMOSToTSL.ExposeIS04Receivers {
+		for _, srcDev := range cfg.NMOSToTSL.DirectSources {
+			if !srcDev.Enabled {
+				continue
+			}
+			for _, b := range srcDev.Bindings {
+				if !b.Enabled {
+					continue
+				}
+				rcvID := GPIReceiverID(s.nodeSeed, b.ID)
+				if _, dup := newByReceiver[rcvID]; dup {
+					continue
+				}
+				roleLabel := strings.ToUpper(b.Role)
+				lbl := fmt.Sprintf("NMOS2TSL Scr:%d Idx:%d %s (%s)", b.Screen, b.Index, roleLabel, b.SenderLabel)
+				desc := fmt.Sprintf("NMOS IS-07 Boolean Receiver -> TSL Screen %d Index %d %s", b.Screen, b.Index, roleLabel)
+				defaultRcvConn := ReceiverConnectionState{
+					SenderID:      nil,
+					MasterEnable:  false,
+					Activation:    ActivationParams{Mode: nil, RequestedTime: nil},
+					TransportFile: TransportFileState{Data: nil, Type: nil},
+					TransportParams: []ReceiverWebSocketParams{
+						{
+							ConnectionAuthorization: false,
+							ConnectionURI:           nil,
+							ExtIS07RestAPIURL:       nil,
+							ExtIS07SourceID:         nil,
+						},
+					},
+				}
+				stagedRcv := cloneReceiverConnState(defaultRcvConn)
+				activeRcv := cloneReceiverConnState(defaultRcvConn)
+				extControlled := false
+				if prev, ok := prevReceivers[rcvID]; ok {
+					stagedRcv = cloneReceiverConnState(prev.Staged)
+					activeRcv = cloneReceiverConnState(prev.Active)
+					extControlled = prev.ExternalControlled
+				}
+				rcvRes := ReceiverResource{
+					ID:                rcvID,
+					Version:           nowVer,
+					Label:             lbl,
+					Description:       desc,
+					Tags:              map[string][]string{"tsl_index": {fmt.Sprintf("%d", b.Index)}, "role": {b.Role}},
+					DeviceID:          deviceID,
+					Format:            FormatData,
+					Transport:         TransportWebsocket,
+					InterfaceBindings: []string{ifName},
+					Caps: ReceiverCaps{
+						MediaTypes: []string{MediaTypeJSON},
+						EventTypes: []string{EventTypeBoolean},
+					},
+					Subscription: ReceiverSubscription{
+						SenderID: activeRcv.SenderID,
+						Active:   activeRcv.MasterEnable,
+					},
+				}
+				re := &ReceiverEntry{
+					BindingID:          b.ID,
+					Receiver:           rcvRes,
+					Staged:             stagedRcv,
+					Active:             activeRcv,
+					ExternalControlled: extControlled,
+				}
+				newByReceiver[rcvID] = re
+				orderedReceivers = append(orderedReceivers, re)
+				receiverIDs = append(receiverIDs, rcvID)
+			}
+		}
+	}
+
 	s.device = DeviceResource{
 		ID:          deviceID,
 		Version:     nowVer,
@@ -300,7 +401,7 @@ func (s *Store) RebuildFromConfig(cfg config.Config, initialValueFn func(chID in
 		Type:        DeviceTypeGeneric,
 		NodeID:      nodeID,
 		Senders:     senderIDs,
-		Receivers:   []string{},
+		Receivers:   receiverIDs,
 		Controls: []DeviceControl{
 			{
 				Type:          ControlSRv11,
@@ -324,12 +425,15 @@ func (s *Store) RebuildFromConfig(cfg config.Config, initialValueFn func(chID in
 	s.bySenderID = newBySender
 	s.byFlowID = newByFlow
 	s.ordered = ordered
+	s.byReceiverID = newByReceiver
+	s.orderedReceivers = orderedReceivers
 
 	s.verSlf++
 	s.verDvc++
 	s.verSrc++
 	s.verFlw++
 	s.verSnd++
+	s.verRcv++
 
 	cb := s.onResourceChange
 	s.mu.Unlock()
@@ -498,6 +602,155 @@ func (s *Store) ActivateLocalSenderForReceiver(senderID string, receiverID strin
 	if changed && cb != nil {
 		cb()
 	}
+}
+
+// SnapshotReceivers returns copies of all IS-04 Receiver resources exposed for NMOS -> TSL.
+func (s *Store) SnapshotReceivers() []ReceiverResource {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]ReceiverResource, 0, len(s.orderedReceivers))
+	for _, r := range s.orderedReceivers {
+		out = append(out, r.Receiver)
+	}
+	return out
+}
+
+// NodeSeed returns the active deterministic UUIDv5 seed string.
+func (s *Store) NodeSeed() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.nodeSeed
+}
+
+// SnapshotActiveReceiverConnections returns externally patched IS-05 Receiver states keyed by BindingID.
+func (s *Store) SnapshotActiveReceiverConnections() map[string]ReceiverConnectionState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make(map[string]ReceiverConnectionState, len(s.orderedReceivers))
+	for _, r := range s.orderedReceivers {
+		if r.ExternalControlled {
+			out[r.BindingID] = cloneReceiverConnState(r.Active)
+		}
+	}
+	return out
+}
+
+// SyncLocalReceiverFromDirect updates the local IS-04/IS-05 Receiver state to reflect an active
+// built-in Direct GPI subscription so NMOS Registries & Explorers see accurate crosspoints.
+func (s *Store) SyncLocalReceiverFromDirect(bindingID, senderID, sourceID, wsURI, restURL string, active bool) {
+	s.mu.Lock()
+	rcvID := GPIReceiverID(s.nodeSeed, bindingID)
+	re, ok := s.byReceiverID[rcvID]
+	if !ok {
+		s.mu.Unlock()
+		return
+	}
+	re.ExternalControlled = false
+	changed := false
+	if re.Active.MasterEnable != active {
+		re.Active.MasterEnable = active
+		re.Staged.MasterEnable = active
+		changed = true
+	}
+	curSnd := ""
+	if re.Active.SenderID != nil {
+		curSnd = *re.Active.SenderID
+	}
+	if curSnd != senderID {
+		if senderID == "" {
+			re.Active.SenderID = nil
+			re.Staged.SenderID = nil
+		} else {
+			cp := senderID
+			re.Active.SenderID = &cp
+			re.Staged.SenderID = &cp
+		}
+		changed = true
+	}
+	if len(re.Active.TransportParams) == 0 {
+		re.Active.TransportParams = []ReceiverWebSocketParams{{ConnectionAuthorization: false}}
+	}
+	tp := &re.Active.TransportParams[0]
+	if wsURI != "" && (tp.ConnectionURI == nil || *tp.ConnectionURI != wsURI) {
+		cp := wsURI
+		tp.ConnectionURI = &cp
+		changed = true
+	}
+	if sourceID != "" && (tp.ExtIS07SourceID == nil || *tp.ExtIS07SourceID != sourceID) {
+		cp := sourceID
+		tp.ExtIS07SourceID = &cp
+		changed = true
+	}
+	if restURL != "" && (tp.ExtIS07RestAPIURL == nil || *tp.ExtIS07RestAPIURL != restURL) {
+		cp := restURL
+		tp.ExtIS07RestAPIURL = &cp
+		changed = true
+	}
+	re.Staged.TransportParams = cloneReceiverConnState(re.Active).TransportParams
+	re.Receiver.Subscription.SenderID = re.Active.SenderID
+	re.Receiver.Subscription.Active = re.Active.MasterEnable
+	if changed {
+		nowTAI := TAITimestampNow()
+		modeCp := "activate_immediate"
+		re.Active.Activation.Mode = &modeCp
+		re.Active.Activation.ActivationTime = &nowTAI
+		re.Receiver.Version = nowTAI
+		s.verRcv++
+	}
+	cb := s.onResourceChange
+	s.mu.Unlock()
+
+	if changed && cb != nil {
+		cb()
+	}
+}
+
+func cloneReceiverConnState(in ReceiverConnectionState) ReceiverConnectionState {
+	out := in
+	if in.SenderID != nil {
+		cp := *in.SenderID
+		out.SenderID = &cp
+	}
+	if in.Activation.Mode != nil {
+		cp := *in.Activation.Mode
+		out.Activation.Mode = &cp
+	}
+	if in.Activation.RequestedTime != nil {
+		cp := *in.Activation.RequestedTime
+		out.Activation.RequestedTime = &cp
+	}
+	if in.Activation.ActivationTime != nil {
+		cp := *in.Activation.ActivationTime
+		out.Activation.ActivationTime = &cp
+	}
+	if in.TransportFile.Data != nil {
+		cp := *in.TransportFile.Data
+		out.TransportFile.Data = &cp
+	}
+	if in.TransportFile.Type != nil {
+		cp := *in.TransportFile.Type
+		out.TransportFile.Type = &cp
+	}
+	out.TransportParams = make([]ReceiverWebSocketParams, len(in.TransportParams))
+	for i, p := range in.TransportParams {
+		cp := p
+		if p.ConnectionURI != nil {
+			u := *p.ConnectionURI
+			cp.ConnectionURI = &u
+		}
+		if p.ExtIS07RestAPIURL != nil {
+			r := *p.ExtIS07RestAPIURL
+			cp.ExtIS07RestAPIURL = &r
+		}
+		if p.ExtIS07SourceID != nil {
+			sid := *p.ExtIS07SourceID
+			cp.ExtIS07SourceID = &sid
+		}
+		out.TransportParams[i] = cp
+	}
+	return out
 }
 
 func cloneConnState(in SenderConnectionState) SenderConnectionState {

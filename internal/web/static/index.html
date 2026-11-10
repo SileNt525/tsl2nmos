@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TSL2NMOS | TSL 5.0 → NMOS IS-07 Broadcast Tally Gateway</title>
+<title>TSL2NMOS | TSL 5.0 ⇄ NMOS IS-07 Bidirectional Tally Gateway</title>
 <style>
 :root {
   --bg: #0b0e14;
@@ -37,7 +37,7 @@ header {
   align-items: center;
   gap: 12px;
 }
-.brand { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .brand h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.4px; }
 .hdr-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .badge {
@@ -76,12 +76,12 @@ header {
 }
 .tab-btn {
   background: transparent; color: var(--muted); border: none;
-  padding: 9px 16px; cursor: pointer; font-size: 13.5px; font-weight: 600;
+  padding: 9px 15px; cursor: pointer; font-size: 13.5px; font-weight: 600;
   border-bottom: 2px solid transparent; border-radius: 0; transition: 0.15s;
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
-main { max-width: 1440px; margin: 0 auto; padding: 18px 20px 40px; }
+main { max-width: 1480px; margin: 0 auto; padding: 18px 20px 40px; }
 .tab-pane { display: none; }
 .tab-pane.active { display: block; }
 .stats-bar {
@@ -151,14 +151,26 @@ button.danger { background: rgba(255,46,56,0.14); border-color: #ff2e38; color: 
 .ov-btns { display: flex; gap: 4px; }
 .ov-btns button { flex: 1; padding: 4px 2px; font-size: 11.5px; }
 .ov-btns button.active-ov { border-color: #ffd33d; color: #ffd33d; background: rgba(255,211,61,0.12); }
+.mini-ov { display: inline-flex; gap: 3px; align-items: center; margin-left: 6px; }
+.mini-ov button { padding: 2px 6px; font-size: 11px; }
+.mini-ov button.active-ov { border-color: #ffd33d; color: #ffd33d; background: rgba(255,211,61,0.14); }
+.gpi-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 700;
+  border: 1px solid var(--border); background: #171c26; color: var(--muted);
+}
+.gpi-pill.on {
+  background: rgba(0, 224, 101, 0.18); color: #5aff9f; border-color: var(--tally-green);
+}
 .card-panel {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 8px; padding: 16px; margin-bottom: 16px;
 }
 .card-panel h2 { font-size: 15px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
-th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); }
+th, td { padding: 8px 9px; border-bottom: 1px solid var(--border); text-align: left; }
+th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); white-space: nowrap; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 .tag-pill {
   display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11.5px; font-weight: 700;
@@ -184,6 +196,7 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
     <h1>TSL2NMOS</h1>
     <span class="badge"><span id="sseDot" class="dot"></span><span id="sseText"></span></span>
     <span class="badge" id="wsBadge"><span id="wsDot" class="dot"></span><span id="wsText"></span></span>
+    <span class="badge" id="n2tBadge"><span id="n2tDot" class="dot"></span><span id="n2tText"></span></span>
   </div>
   <div class="hdr-right">
     <div class="mono" style="color:var(--muted)" id="hdrEndpoints"></div>
@@ -197,12 +210,13 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
 <div class="tabs">
   <button class="tab-btn active" onclick="switchTab('matrix', this)" data-i18n="tab_matrix"></button>
   <button class="tab-btn" onclick="switchTab('targets', this)" data-i18n="tab_targets"></button>
+  <button class="tab-btn" onclick="switchTab('nmos2tsl', this)" data-i18n="tab_nmos2tsl"></button>
   <button class="tab-btn" onclick="switchTab('channels', this)" data-i18n="tab_channels"></button>
   <button class="tab-btn" onclick="switchTab('sniffer', this)" data-i18n="tab_sniffer"></button>
 </div>
 
 <main>
-  <!-- TAB 1: LIVE TALLY MATRIX -->
+  <!-- TAB 1: LIVE TALLY MATRIX (TSL -> NMOS) -->
   <div id="tab-matrix" class="tab-pane active">
     <div class="stats-bar">
       <div class="stat-card">
@@ -238,12 +252,12 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
     <div id="matrixGrid" class="matrix-grid"></div>
   </div>
 
-  <!-- TAB 2: IS-05 DIRECT GPO PATCHING -->
+  <!-- TAB 2: IS-05 DIRECT GPO PATCHING (TSL -> NMOS) -->
   <div id="tab-targets" class="tab-pane">
     <div class="card-panel">
       <h2>
         <span data-i18n="targets_add_title"></span>
-        <button onclick="scanMDNSNodes()" data-i18n="btn_mdns_scan"></button>
+        <button onclick="scanMDNSNodes('target')" data-i18n="btn_mdns_scan"></button>
       </h2>
       <div id="mdnsResult" style="margin-bottom:10px;display:none;"></div>
       <div class="form-row">
@@ -266,21 +280,172 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
         <span data-i18n="ws_sessions_title"></span>
         <button onclick="resyncTargets()" data-i18n="btn_resync_all"></button>
       </h2>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="th_ws_remote"></th>
-            <th data-i18n="th_ws_conn_at"></th>
-            <th data-i18n="th_ws_health"></th>
-            <th data-i18n="th_ws_subs"></th>
-          </tr>
-        </thead>
-        <tbody id="wsClientsBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="th_ws_remote"></th>
+              <th data-i18n="th_ws_conn_at"></th>
+              <th data-i18n="th_ws_health"></th>
+              <th data-i18n="th_ws_subs"></th>
+            </tr>
+          </thead>
+          <tbody id="wsClientsBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <!-- TAB 3: CHANNELS & TSL RULES -->
+  <!-- TAB 3: NMOS -> TSL REVERSE GATEWAY (GPI IN -> TSL OUT) -->
+  <div id="tab-nmos2tsl" class="tab-pane">
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="lbl" data-i18n="n2t_stat_tx_title"></div>
+        <div class="val mono" id="stN2TTxState">-</div>
+        <div class="sub" id="stN2TTxPkts">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl" data-i18n="n2t_stat_ws_title"></div>
+        <div class="val" id="stN2TSubSess">-</div>
+        <div class="sub" id="stN2TSubSrcs">-</div>
+      </div>
+      <div class="stat-card">
+        <div class="lbl" data-i18n="n2t_stat_bind_title"></div>
+        <div class="val" id="stN2TBindSummary">-</div>
+        <div class="sub" id="stN2TRcvExpose">-</div>
+      </div>
+    </div>
+
+    <!-- TSL Output Settings -->
+    <div class="card-panel" oninput="markN2TDirty()" onchange="markN2TDirty()">
+      <h2>
+        <span><span data-i18n="n2t_cfg_title"></span> <span id="n2tDirtyHint" style="display:none;color:var(--warn);font-size:12.5px;margin-left:8px;" data-i18n="cfg_dirty_hint"></span></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" onclick="fillSimplyLiveTSLInput()" data-i18n="n2t_btn_fill_sl"></button>
+          <button type="button" class="primary" onclick="saveN2TConfig()" data-i18n="btn_save_apply"></button>
+        </div>
+      </h2>
+      <div class="form-row">
+        <div class="field">
+          <label data-i18n="n2t_lbl_enabled"></label>
+          <select id="n2tEnabled">
+            <option value="false" data-i18n="n2t_opt_disabled"></option>
+            <option value="true" data-i18n="n2t_opt_enabled"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="n2t_lbl_transport"></label>
+          <select id="n2tTransport">
+            <option value="udp" data-i18n="n2t_opt_tr_udp"></option>
+            <option value="tcp_client" data-i18n="n2t_opt_tr_tcp_cli"></option>
+            <option value="tcp_server" data-i18n="n2t_opt_tr_tcp_srv"></option>
+          </select>
+        </div>
+        <div class="field" style="min-width:240px;flex:1;">
+          <label data-i18n="n2t_lbl_target_addr"></label>
+          <input type="text" id="n2tTargetAddr" data-i18n-placeholder="n2t_ph_target_addr">
+        </div>
+        <div class="field">
+          <label data-i18n="n2t_lbl_protocol"></label>
+          <select id="n2tProtocol">
+            <option value="v5.0" data-i18n="n2t_opt_proto_50"></option>
+            <option value="v3.1" data-i18n="n2t_opt_proto_31"></option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="field" style="min-width:260px;">
+          <label data-i18n="n2t_lbl_lamp_map"></label>
+          <select id="n2tLampMap">
+            <option value="lh_red_rh_green" data-i18n="n2t_opt_lamp_sl"></option>
+            <option value="rh_red_lh_green" data-i18n="n2t_opt_lamp_classic"></option>
+            <option value="both_color" data-i18n="n2t_opt_lamp_both"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="n2t_lbl_txt_follow"></label>
+          <select id="n2tTxtFollow">
+            <option value="false" data-i18n="n2t_opt_txt_off"></option>
+            <option value="true" data-i18n="n2t_opt_txt_on"></option>
+          </select>
+        </div>
+        <div class="field">
+          <label data-i18n="n2t_lbl_repeat_ms"></label>
+          <input type="number" id="n2tRepeatMs" min="0" max="60000" step="100" style="width:130px;">
+        </div>
+        <div class="field">
+          <label data-i18n="n2t_lbl_expose_rcv"></label>
+          <select id="n2tExposeRcv">
+            <option value="true" data-i18n="n2t_opt_expose_on"></option>
+            <option value="false" data-i18n="n2t_opt_expose_off"></option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Outbound TSL Preview Matrix -->
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="n2t_preview_title"></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" onclick="setN2TOverride('*', 'auto')" data-i18n="btn_all_auto"></button>
+          <button type="button" onclick="setN2TOverride('*', 'force_off')" data-i18n="btn_all_off"></button>
+        </div>
+      </h2>
+      <div style="color:var(--muted);font-size:12.5px;margin-bottom:12px;" data-i18n-html="n2t_preview_tip_html"></div>
+      <div id="n2tDisplayGrid" class="matrix-grid"></div>
+    </div>
+
+    <!-- Scan / Add NMOS GPI Source Device -->
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="n2t_add_src_title"></span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" onclick="reuseExistingTargetForGPI()" data-i18n="n2t_btn_reuse_dev"></button>
+          <button type="button" onclick="scanMDNSNodes('nmos2tsl')" data-i18n="btn_mdns_scan"></button>
+        </div>
+      </h2>
+      <div id="n2tMdnsResult" style="margin-bottom:10px;display:none;"></div>
+      <div class="form-row">
+        <div class="field" style="flex:1;min-width:260px;">
+          <label data-i18n="n2t_lbl_src_url"></label>
+          <input type="text" id="inpN2TSrcUrl" data-i18n-placeholder="ph_target_url">
+        </div>
+        <div class="field" style="min-width:200px;">
+          <label data-i18n="lbl_target_label"></label>
+          <input type="text" id="inpN2TSrcLabel" data-i18n-placeholder="n2t_ph_src_label">
+        </div>
+        <button class="primary" onclick="addAndInspectN2TSource()" data-i18n="n2t_btn_probe_gpi"></button>
+      </div>
+    </div>
+
+    <!-- Per-Device GPI Mapping Cards -->
+    <div id="n2tSourcesContainer"></div>
+
+    <!-- Active Outbound IS-07 WebSocket Subscriber Sessions -->
+    <div class="card-panel">
+      <h2>
+        <span data-i18n="n2t_sessions_title"></span>
+        <button onclick="resyncN2T()" data-i18n="n2t_btn_resync"></button>
+      </h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="n2t_th_ws_uri"></th>
+              <th data-i18n="n2t_th_ws_state"></th>
+              <th data-i18n="th_ws_conn_at"></th>
+              <th data-i18n="th_ws_health"></th>
+              <th data-i18n="th_ws_subs"></th>
+            </tr>
+          </thead>
+          <tbody id="n2tSessionsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: CHANNELS & TSL RULES -->
   <div id="tab-channels" class="tab-pane">
     <div class="card-panel" oninput="markCfgDirty()" onchange="markCfgDirty()">
       <h2>
@@ -369,24 +534,26 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
           <button class="primary" onclick="saveFullConfig()" data-i18n="btn_save_reload"></button>
         </div>
       </h2>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="th_ch_id"></th>
-            <th data-i18n="th_ch_name"></th>
-            <th data-i18n="th_ch_any_scr"></th>
-            <th data-i18n="th_ch_scr"></th>
-            <th data-i18n="th_ch_idx"></th>
-            <th data-i18n="th_ch_uuid"></th>
-            <th data-i18n="th_ch_act"></th>
-          </tr>
-        </thead>
-        <tbody id="channelsCfgBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="th_ch_id"></th>
+              <th data-i18n="th_ch_name"></th>
+              <th data-i18n="th_ch_any_scr"></th>
+              <th data-i18n="th_ch_scr"></th>
+              <th data-i18n="th_ch_idx"></th>
+              <th data-i18n="th_ch_uuid"></th>
+              <th data-i18n="th_ch_act"></th>
+            </tr>
+          </thead>
+          <tbody id="channelsCfgBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <!-- TAB 4: TSL SNIFFER & SIMULATOR -->
+  <!-- TAB 5: TSL SNIFFER & SIMULATOR -->
   <div id="tab-sniffer" class="tab-pane">
     <div class="card-panel">
       <h2 data-i18n="sim_title"></h2>
@@ -412,22 +579,24 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
         <span data-i18n="sniff_title"></span>
         <button onclick="clearSnifferTable()" data-i18n="btn_sniff_clear"></button>
       </h2>
-      <table>
-        <thead>
-          <tr>
-            <th data-i18n="th_sniff_time"></th>
-            <th data-i18n="th_sniff_src"></th>
-            <th data-i18n="th_sniff_scr"></th>
-            <th data-i18n="th_sniff_idx"></th>
-            <th data-i18n="th_sniff_rh"></th>
-            <th data-i18n="th_sniff_txt"></th>
-            <th data-i18n="th_sniff_lh"></th>
-            <th data-i18n="th_sniff_umd"></th>
-            <th data-i18n="th_sniff_fmt"></th>
-          </tr>
-        </thead>
-        <tbody id="snifferBody"></tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="th_sniff_time"></th>
+              <th data-i18n="th_sniff_src"></th>
+              <th data-i18n="th_sniff_scr"></th>
+              <th data-i18n="th_sniff_idx"></th>
+              <th data-i18n="th_sniff_rh"></th>
+              <th data-i18n="th_sniff_txt"></th>
+              <th data-i18n="th_sniff_lh"></th>
+              <th data-i18n="th_sniff_umd"></th>
+              <th data-i18n="th_sniff_fmt"></th>
+            </tr>
+          </thead>
+          <tbody id="snifferBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </main>
@@ -437,13 +606,16 @@ th { color: var(--muted); font-weight: 600; background: rgba(255,255,255,0.02); 
 <script>
 const I18N = {
   zh: {
-    doc_title: 'TSL2NMOS | TSL 5.0 → NMOS IS-07 广播级 Tally 网关',
+    doc_title: 'TSL2NMOS | TSL 5.0 ⇄ NMOS IS-07 双向广播级 Tally 网关',
     sse_connecting: '连接中...',
     sse_online: '实时在线',
     sse_reconnecting: '重连中...',
-    ws_badge: 'IS-07 接收端: {n}',
+    ws_badge: 'TSL→NMOS 接收端: {n}',
+    n2t_badge_off: 'NMOS→TSL: 未启用',
+    n2t_badge_on: 'NMOS→TSL: 活跃 ({n} GPI)',
     tab_matrix: '实时 Tally 矩阵 & 强制测试',
-    tab_targets: 'GPO 交叉点绑定',
+    tab_targets: 'GPO 交叉点绑定 (TSL→NMOS)',
+    tab_nmos2tsl: 'NMOS → TSL 反向网关 (GPI 输入)',
     tab_channels: '讯道与 TSL 映射规则配置',
     tab_sniffer: 'TSL 5.0 实时抓包与信号发生器',
     stat_tsl_title: 'TSL 5.0 信号接入状态',
@@ -471,7 +643,7 @@ const I18N = {
     ov_green: '强绿',
     ov_both: '双亮',
     ov_off: '强灭',
-    targets_add_title: '添加 / 扫描 NMOS IS-07-GPIO 接收设备',
+    targets_add_title: '添加 / 扫描 NMOS IS-07-GPIO 接收设备 (输出 GPO)',
     btn_mdns_scan: '局域网 mDNS 扫描设备',
     lbl_target_url: 'NMOS 设备地址（支持直接填 IP 自动探测端口，或填完整 http://IP:端口）',
     ph_target_url: '例如: 192.168.42.59 或 http://192.168.42.59:4450',
@@ -494,6 +666,7 @@ const I18N = {
     th_is05_status: 'IS-05 路由状态',
     opt_color_red: '🔴 红 Tally (PGM)',
     opt_color_green: '🟢 绿 Tally (PVW)',
+    opt_color_amber: '🟡 琥珀双亮 (R+G)',
     st_disabled: '未启用',
     st_patched: '● 已激活 (Active)',
     st_patching: '下发中...',
@@ -580,16 +753,104 @@ const I18N = {
     toast_patch_saved: 'GPO 交叉点绑定已保存并立即下发 IS-05 激活指令',
     toast_target_removed: '已移除目标设备',
     toast_resync: '已触发后台 IS-05 路由重同步',
-    toast_sim_sent: '已发送模拟 TSL 5.0 UDP 数据包'
+    toast_sim_sent: '已发送模拟 TSL 5.0 UDP 数据包',
+
+    // NMOS -> TSL Reverse Gateway keys
+    n2t_stat_tx_title: 'TSL 输出发送器状态 (NMOS → TSL)',
+    n2t_stat_tx_pkts: '已发包: {pkts} | DMSG: {msgs} | 失败: {errs}',
+    n2t_stat_ws_title: 'IS-07 GPI 订阅会话',
+    n2t_stat_ws_val: '{ok} / {total} 个 WebSocket 已连接',
+    n2t_stat_ws_none: '暂无活跃 GPI 订阅连接',
+    n2t_stat_ws_sub: '已订阅 GPI 事件源: {n} 路',
+    n2t_stat_bind_title: 'GPI → TSL 绑定与注册状态',
+    n2t_stat_bind_active: '{ok} / {total} 路 GPI 已就绪',
+    n2t_stat_bind_none: '尚未启用 GPI 输入绑定',
+    n2t_stat_expose_on: 'IS-04 虚拟 Receiver 暴露: 已开启',
+    n2t_stat_expose_off: 'IS-04 虚拟 Receiver 暴露: 已关闭',
+    n2t_cfg_title: 'TSL 输出发送参数（对接 SimplyLive TSL_Input :9001 或其他切换台/UMD屏）',
+    n2t_btn_fill_sl: '填入 SimplyLive TSL_Input (:9001)',
+    n2t_lbl_enabled: 'TSL 输出总开关',
+    n2t_opt_disabled: '关闭 (不对外发送 TSL)',
+    n2t_opt_enabled: '启用 (实时向目标发送 TSL)',
+    n2t_lbl_transport: '输出传输协议',
+    n2t_opt_tr_udp: 'UDP 单播直发 (SimplyLive TSL_Input :9001 推荐)',
+    n2t_opt_tr_tcp_cli: 'TCP 客户端主动连接推送 (自动 DLE/STX 封装)',
+    n2t_opt_tr_tcp_srv: 'TCP 服务端监听等待拉取 (自动 DLE/STX 封装)',
+    n2t_lbl_target_addr: '目标导播机 IP:端口 (TCP Server 模式填本机监听如 0.0.0.0:8902)',
+    n2t_ph_target_addr: '例如: 192.168.42.15:9001',
+    n2t_lbl_protocol: 'TSL 协议版本',
+    n2t_opt_proto_50: 'TSL UMD v5.0 (推荐，支持 Screen + 16位 Index)',
+    n2t_opt_proto_31: 'TSL UMD v3.1 (经典 18 字节定长，Index 0~126)',
+    n2t_lbl_lamp_map: '输出红/绿灯位编码规则',
+    n2t_opt_lamp_sl: 'SimplyLive 标准: LH左灯=红(PGM), RH右灯=绿(PVW)',
+    n2t_opt_lamp_classic: '经典双灯位: RH右灯=红(PGM), LH左灯=绿(PVW)',
+    n2t_opt_lamp_both: '同色双灯位: 红=左右同红, 绿=左右同绿',
+    n2t_lbl_txt_follow: 'Text 文本背光跟随',
+    n2t_opt_txt_off: '保持熄灭 (推荐)',
+    n2t_opt_txt_on: '跟随红/绿状态同步点亮',
+    n2t_lbl_repeat_ms: '周期状态刷新间隔 (ms, 0=仅变化时发)',
+    n2t_lbl_expose_rcv: '暴露 NMOS IS-04/IS-05 Receiver',
+    n2t_opt_expose_on: '开启 (同步注册至 Registry 供外部控制器路由)',
+    n2t_opt_expose_off: '关闭 (仅使用下方直连 GPI 订阅)',
+    n2t_preview_title: '实时输出 TSL 显示单元预览 & 信号测试',
+    n2t_preview_tip_html: '提示：多路 GPI 若指向同一 <b>Screen + Index</b>（例如奇数 GPI=红 PGM、偶数 GPI=绿 PVW），网关会自动聚合成单条 TSL 报文输出。可在下方 GPI 行点击 <b>强闭/强断</b> 免短接硬件直接测试 SimplyLive TSL 输入反应。',
+    n2t_preview_empty: '暂无已启用的 GPI → TSL 输出通道。请在下方添加 GPI 设备（如 Riedel NSA-010C）并勾选启用所需的 GPInput 端口。',
+    n2t_add_src_title: '添加 / 扫描 NMOS IS-07-GPIO 输入设备 (采集 GPI)',
+    n2t_btn_reuse_dev: '一键填入已配 GPO 设备地址',
+    n2t_lbl_src_url: 'NMOS GPI 设备地址（支持直接填 IP 自动探测端口，如 Riedel NSA-010C 的 192.168.42.59）',
+    n2t_ph_src_label: '例如: Riedel-NSA-010C GPI 输入',
+    n2t_btn_probe_gpi: '探测 GPI 并加入配置',
+    n2t_sources_empty: '尚未添加 NMOS GPI 输入源设备。可在上方输入 Riedel StageLink NSA-010C 的 IP（如 192.168.42.59）一键探测其 16 路 GPInput 端口。',
+    n2t_opt_idx0: '起始 Index: 0 (SimplyLive 0-based)',
+    n2t_opt_idx1: '起始 Index: 1 (常规 1-based)',
+    n2t_btn_map_dual8: '一键 8 机位奇偶红/绿',
+    n2t_btn_map_red16: '一键 16 路独立红 Tally',
+    n2t_btn_rescan_gpi: '重新扫描 GPI',
+    n2t_btn_save_sub: '保存并激活 GPI 订阅',
+    n2t_th_gpi_port: '发送端端口 (GPI)',
+    n2t_th_live_sig: '实时 GPI 电平 & 强制测试',
+    n2t_th_polarity: '极性',
+    n2t_th_screen: 'Screen',
+    n2t_th_index: 'TSL Index',
+    n2t_th_role: '触发灯色',
+    n2t_th_umd: '输出 UMD 文本',
+    n2t_th_sub_st: 'IS-07 订阅状态',
+    n2t_sig_on: '● 触发 ON',
+    n2t_sig_off: '○ 释放 OFF',
+    n2t_ov_on: '强闭',
+    n2t_ov_off: '强断',
+    n2t_pol_no: '常开 (NO)',
+    n2t_pol_nc: '反相 (NC)',
+    n2t_st_sub_ok: '● 已订阅 (Subscribed)',
+    n2t_st_sub_wait: '订阅建连中...',
+    n2t_sessions_title: '本机主动发起的 IS-07 WebSocket GPI 订阅会话',
+    n2t_btn_resync: '立即重连并同步全部 GPI',
+    n2t_th_ws_uri: '远端 WebSocket URI',
+    n2t_th_ws_state: '会话状态',
+    n2t_ws_connected: '● 在线',
+    n2t_ws_reconnecting: '重连中',
+    n2t_sessions_empty: '暂无活跃 GPI 订阅会话（保存并启用至少 1 路 GPI 绑定后将自动建立单连接多路复用订阅）',
+    n2t_toast_filled_sl: '已填入 SimplyLive TSL_Input 地址: {addr}',
+    n2t_toast_no_dev: '当前尚未配置 GPO 设备，请直接输入 IP（如 192.168.42.59）',
+    n2t_toast_reused: '已填入设备地址: {url}',
+    n2t_toast_probed: '成功探测到 {n} 路布尔型 GPI 输入发送器！',
+    n2t_toast_refreshed: '已刷新 {n} 路 GPI 发送器列表',
+    n2t_toast_mapped_dual: '已从 Index {start} 起生成 {n} 路奇偶红/绿 GPI 映射，请点击“保存并激活 GPI 订阅”生效',
+    n2t_toast_mapped_1to1: '已从 Index {start} 起生成 {n} 路 1:1 红 Tally GPI 映射，请点击“保存并激活 GPI 订阅”生效',
+    n2t_toast_saved: 'NMOS → TSL 配置已保存并热生效',
+    n2t_toast_resync: '已触发 IS-07 GPI 重新探测与订阅同步'
   },
   en: {
-    doc_title: 'TSL2NMOS | TSL 5.0 → NMOS IS-07 Broadcast Tally Gateway',
+    doc_title: 'TSL2NMOS | TSL 5.0 ⇄ NMOS IS-07 Bidirectional Tally Gateway',
     sse_connecting: 'Connecting...',
     sse_online: 'Live',
     sse_reconnecting: 'Reconnecting...',
-    ws_badge: 'IS-07 Receivers: {n}',
+    ws_badge: 'TSL→NMOS Rx: {n}',
+    n2t_badge_off: 'NMOS→TSL: Off',
+    n2t_badge_on: 'NMOS→TSL: Active ({n} GPI)',
     tab_matrix: 'Live Tally Matrix & Override',
-    tab_targets: 'GPO Crosspoint Patching',
+    tab_targets: 'GPO Crosspoint Patching (TSL→NMOS)',
+    tab_nmos2tsl: 'NMOS → TSL Reverse Gateway (GPI In)',
     tab_channels: 'Channels & TSL Mapping',
     tab_sniffer: 'TSL 5.0 Sniffer & Simulator',
     stat_tsl_title: 'TSL 5.0 Signal Input',
@@ -617,7 +878,7 @@ const I18N = {
     ov_green: 'Grn',
     ov_both: 'Both',
     ov_off: 'Off',
-    targets_add_title: 'Add / Scan NMOS IS-07-GPIO Receiver Devices',
+    targets_add_title: 'Add / Scan NMOS IS-07-GPIO Receiver Devices (Outbound GPO)',
     btn_mdns_scan: 'Scan LAN via mDNS',
     lbl_target_url: 'NMOS Device Address (IP with auto port probe, or full http://IP:Port)',
     ph_target_url: 'e.g. 192.168.42.59 or http://192.168.42.59:4450',
@@ -640,6 +901,7 @@ const I18N = {
     th_is05_status: 'IS-05 Patch Status',
     opt_color_red: '🔴 Red Tally (PGM)',
     opt_color_green: '🟢 Green Tally (PVW)',
+    opt_color_amber: '🟡 Amber Tally (R+G)',
     st_disabled: 'Disabled',
     st_patched: '● Patched (Active)',
     st_patching: 'Patching...',
@@ -726,7 +988,92 @@ const I18N = {
     toast_patch_saved: 'GPO crosspoint bindings saved & IS-05 activation dispatched',
     toast_target_removed: 'Target device removed',
     toast_resync: 'Triggered background IS-05 patch resync',
-    toast_sim_sent: 'Simulated TSL 5.0 packet injected'
+    toast_sim_sent: 'Simulated TSL 5.0 packet injected',
+
+    // NMOS -> TSL Reverse Gateway keys
+    n2t_stat_tx_title: 'TSL Output Transmitter (NMOS → TSL)',
+    n2t_stat_tx_pkts: 'Sent Pkts: {pkts} | DMSG: {msgs} | Err: {errs}',
+    n2t_stat_ws_title: 'IS-07 GPI Subscriptions',
+    n2t_stat_ws_val: '{ok} / {total} WebSocket(s) Connected',
+    n2t_stat_ws_none: 'No active GPI subscriptions',
+    n2t_stat_ws_sub: 'Subscribed GPI Sources: {n}',
+    n2t_stat_bind_title: 'GPI → TSL Bindings & IS-04 Exposure',
+    n2t_stat_bind_active: '{ok} / {total} GPIs Active',
+    n2t_stat_bind_none: 'No GPI input bindings enabled',
+    n2t_stat_expose_on: 'IS-04 Virtual Receivers: Exposed',
+    n2t_stat_expose_off: 'IS-04 Virtual Receivers: Hidden',
+    n2t_cfg_title: 'TSL Output Configuration (Feed SimplyLive TSL_Input :9001 or Switchers / UMDs)',
+    n2t_btn_fill_sl: 'Fill SimplyLive TSL_Input (:9001)',
+    n2t_lbl_enabled: 'Outbound TSL Switch',
+    n2t_opt_disabled: 'Disabled (Do not transmit TSL)',
+    n2t_opt_enabled: 'Enabled (Transmit live TSL to target)',
+    n2t_lbl_transport: 'Output Transport',
+    n2t_opt_tr_udp: 'UDP Unicast Push (Recommended for SimplyLive TSL_Input :9001)',
+    n2t_opt_tr_tcp_cli: 'TCP Client Active Push (Auto DLE/STX Framing)',
+    n2t_opt_tr_tcp_srv: 'TCP Server Passive Listen (Auto DLE/STX Framing)',
+    n2t_lbl_target_addr: 'Target Switcher IP:Port (or Listen Addr e.g. 0.0.0.0:8902 for TCP Server)',
+    n2t_ph_target_addr: 'e.g. 192.168.42.15:9001',
+    n2t_lbl_protocol: 'TSL Protocol Version',
+    n2t_opt_proto_50: 'TSL UMD v5.0 (Recommended, Screen + 16-bit Index)',
+    n2t_opt_proto_31: 'TSL UMD v3.1 (Legacy 18-byte fixed, Index 0–126)',
+    n2t_lbl_lamp_map: 'Outbound Red / Green Lamp Encoding',
+    n2t_opt_lamp_sl: 'SimplyLive Standard: LH=Red (PGM), RH=Green (PVW)',
+    n2t_opt_lamp_classic: 'Classic Dual-Lamp: RH=Red (PGM), LH=Green (PVW)',
+    n2t_opt_lamp_both: 'Same-Color Dual-Lamp: Both Red / Both Green',
+    n2t_lbl_txt_follow: 'Text Tally Backlight',
+    n2t_opt_txt_off: 'Keep Off (Recommended)',
+    n2t_opt_txt_on: 'Follow Red / Green Tally State',
+    n2t_lbl_repeat_ms: 'Periodic Refresh (ms, 0 = on-change only)',
+    n2t_lbl_expose_rcv: 'Expose NMOS IS-04/IS-05 Receivers',
+    n2t_opt_expose_on: 'On (Register virtual Receivers in Registry)',
+    n2t_opt_expose_off: 'Off (Use built-in Direct GPI subscriber only)',
+    n2t_preview_title: 'Live Outbound TSL Display Preview & Signal Test',
+    n2t_preview_tip_html: 'Tip: Multiple GPIs targeting the same <b>Screen + Index</b> (e.g. Odd GPI = Red PGM, Even GPI = Green PVW) automatically merge into one outbound TSL display. Use <b>ON / OFF</b> on any GPI row below to test SimplyLive TSL input without shorting physical pins.',
+    n2t_preview_empty: 'No active GPI → TSL displays yet. Add a GPI device below (e.g. Riedel NSA-010C) and enable the desired GPInput channels.',
+    n2t_add_src_title: 'Add / Scan NMOS IS-07-GPIO Input Devices (Inbound GPI)',
+    n2t_btn_reuse_dev: 'Reuse Configured GPO Device URL',
+    n2t_lbl_src_url: 'NMOS GPI Device Address (IP with auto port probe, e.g. Riedel NSA-010C at 192.168.42.59)',
+    n2t_ph_src_label: 'e.g. Riedel-NSA-010C GPI Input',
+    n2t_btn_probe_gpi: 'Probe GPIs & Add Device',
+    n2t_sources_empty: 'No NMOS GPI input devices added yet. Enter the IP of your Riedel StageLink NSA-010C above (e.g. 192.168.42.59) to discover its 16 GPInput senders.',
+    n2t_opt_idx0: 'Start Index: 0 (SimplyLive 0-based)',
+    n2t_opt_idx1: 'Start Index: 1 (Standard 1-based)',
+    n2t_btn_map_dual8: 'Auto 8-Cam Odd/Even (R/G)',
+    n2t_btn_map_red16: 'Auto 16-Ch 1:1 Red',
+    n2t_btn_rescan_gpi: 'Rescan GPIs',
+    n2t_btn_save_sub: 'Save & Subscribe GPIs',
+    n2t_th_gpi_port: 'Sender Port (GPI)',
+    n2t_th_live_sig: 'Live GPI Signal & Test',
+    n2t_th_polarity: 'Polarity',
+    n2t_th_screen: 'Screen',
+    n2t_th_index: 'TSL Index',
+    n2t_th_role: 'Tally Role',
+    n2t_th_umd: 'Outbound UMD Text',
+    n2t_th_sub_st: 'IS-07 Sub Status',
+    n2t_sig_on: '● ON',
+    n2t_sig_off: '○ OFF',
+    n2t_ov_on: 'ON',
+    n2t_ov_off: 'OFF',
+    n2t_pol_no: 'Normal (NO)',
+    n2t_pol_nc: 'Invert (NC)',
+    n2t_st_sub_ok: '● Subscribed',
+    n2t_st_sub_wait: 'Connecting...',
+    n2t_sessions_title: 'Active Outbound IS-07 WebSocket GPI Subscriptions',
+    n2t_btn_resync: 'Reconnect & Resync All GPIs',
+    n2t_th_ws_uri: 'Remote WebSocket URI',
+    n2t_th_ws_state: 'Session State',
+    n2t_ws_connected: '● Connected',
+    n2t_ws_reconnecting: 'Reconnecting',
+    n2t_sessions_empty: 'No active GPI WebSocket subscriptions (a single multiplexed session connects automatically once GPI bindings are enabled)',
+    n2t_toast_filled_sl: 'Filled SimplyLive TSL_Input address: {addr}',
+    n2t_toast_no_dev: 'No GPO device configured yet — please enter the device IP directly (e.g. 192.168.42.59)',
+    n2t_toast_reused: 'Filled device URL: {url}',
+    n2t_toast_probed: 'Successfully probed {n} boolean GPI sender(s)!',
+    n2t_toast_refreshed: 'Refreshed {n} GPI sender(s)',
+    n2t_toast_mapped_dual: 'Mapped {n} odd/even Red/Green GPI(s) from Index {start}. Click "Save & Subscribe GPIs" to apply.',
+    n2t_toast_mapped_1to1: 'Mapped {n} 1:1 Red GPI(s) from Index {start}. Click "Save & Subscribe GPIs" to apply.',
+    n2t_toast_saved: 'NMOS → TSL configuration saved & hot-applied',
+    n2t_toast_resync: 'Triggered IS-07 GPI re-discovery & subscription sync'
   }
 };
 
@@ -746,12 +1093,14 @@ function detectInitialLang() {
 
 let currentLang = detectInitialLang();
 let sseState = 'connecting'; // 'connecting' | 'online' | 'reconnecting'
-let mdnsScanState = null;    // null | {type:'scanning'|'empty'|'found'|'error', nodes:[], err:''}
+let mdnsScanState = {target: null, nmos2tsl: null};
 let appConfig = null;
 let latestStatus = null;
+let latestN2T = null;
 let snifferRows = [];
 let inspectedCache = {};
 let autoStartChByTarget = {};
+let autoStartIdxByN2TSrc = {};
 
 function t(key, params) {
   const dict = I18N[currentLang] || I18N.zh;
@@ -787,20 +1136,24 @@ function applyLang() {
   });
 
   updateSSEBadge();
-  renderMDNSBox();
+  renderMDNSBox('target');
+  renderMDNSBox('nmos2tsl');
 
   if (latestStatus) {
     renderStatus(latestStatus);
   } else {
     document.getElementById('wsText').textContent = t('ws_badge', {n: 0});
+    document.getElementById('n2tText').textContent = t('n2t_badge_off');
     document.getElementById('stTslPkts').textContent = t('stat_tsl_pkts', {pkts: 0, msgs: 0, errs: 0});
     document.getElementById('stWsClients').textContent = t('stat_ws_clients', {n: 0});
     document.getElementById('stUptime').textContent = t('stat_uptime', {t: '0h 0m 0s'});
     renderWSClients([]);
+    renderN2TSummary(null);
   }
   if (appConfig) {
     renderChannelsCfgTable();
     renderTargetsSection(true);
+    renderN2TSourcesSection(true);
   }
   renderSnifferTable();
 }
@@ -834,8 +1187,9 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
-  const isDirty = document.getElementById('cfgDirtyHint')?.style.display !== 'none';
-  if ((name === 'channels' || name === 'targets') && (!appConfig || !isDirty)) {
+  const isDirty = (document.getElementById('cfgDirtyHint')?.style.display !== 'none') ||
+                  (document.getElementById('n2tDirtyHint')?.style.display !== 'none');
+  if ((name === 'channels' || name === 'targets' || name === 'nmos2tsl') && (!appConfig || !isDirty)) {
     loadConfig();
   }
 }
@@ -843,7 +1197,7 @@ function switchTab(name, btn) {
 async function api(path, opts) {
   const res = await fetch(path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+  if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
   return data;
 }
 
@@ -888,6 +1242,7 @@ function renderStatus(st) {
   renderChannels(st.channels || []);
   renderWSClients(st.ws_clients || []);
   if (appConfig) renderTargetsSection(false);
+  if (st.nmos2tsl) renderN2TSummary(st.nmos2tsl);
 }
 
 function formatUptime(sec) {
@@ -896,9 +1251,10 @@ function formatUptime(sec) {
 }
 
 function renderChannels(channels) {
-  if (latestStatus) latestStatus.channels = channels;
+  const list = Array.isArray(channels) ? channels : [];
+  if (latestStatus) latestStatus.channels = list;
   const grid = document.getElementById('matrixGrid');
-  grid.innerHTML = channels.map(ch => {
+  grid.innerHTML = list.map(ch => {
     const cls = ['cam-card'];
     if (ch.effective_red) cls.push('pgm');
     if (ch.effective_green) cls.push('pvw');
@@ -930,12 +1286,11 @@ function renderChannels(channels) {
 
 function renderWSClients(list) {
   const tb = document.getElementById('wsClientsBody');
-  const arr = Array.isArray(list) ? list : [];
-  if (!arr.length) {
+  if (!Array.isArray(list) || !list.length) {
     tb.innerHTML = `<tr><td colspan="4" style="color:var(--muted)">${esc(t('ws_empty'))}</td></tr>`;
     return;
   }
-  tb.innerHTML = arr.map(c => `
+  tb.innerHTML = list.map(c => `
     <tr>
       <td class="mono">${esc(c.remote_addr)}</td>
       <td>${new Date(c.connected_at).toLocaleTimeString()}</td>
@@ -954,11 +1309,49 @@ async function setOverride(channelId, mode) {
   } catch (e) { showToast(e.message, true); }
 }
 
+function ensureN2TConfigDefaults() {
+  if (!appConfig) return;
+  if (!appConfig.nmos_to_tsl) {
+    appConfig.nmos_to_tsl = {
+      output: {
+        enabled: false,
+        transport: 'udp',
+        target_addr: '192.168.42.15:9001',
+        protocol: 'v5.0',
+        use_dle_framing: false,
+        utf16: false,
+        lamp_mapping: 'lh_red_rh_green',
+        text_follows_tally: false,
+        brightness: 3,
+        repeat_interval_ms: 1000
+      },
+      expose_is04_receivers: true,
+      direct_sources: []
+    };
+  }
+  if (!appConfig.nmos_to_tsl.output) {
+    appConfig.nmos_to_tsl.output = {
+      enabled: false,
+      transport: 'udp',
+      target_addr: '192.168.42.15:9001',
+      protocol: 'v5.0',
+      lamp_mapping: 'lh_red_rh_green',
+      text_follows_tally: false,
+      brightness: 3,
+      repeat_interval_ms: 1000
+    };
+  }
+  appConfig.nmos_to_tsl.direct_sources = appConfig.nmos_to_tsl.direct_sources || [];
+}
+
 async function loadConfig() {
   try {
     appConfig = await api('/api/v1/config');
+    ensureN2TConfigDefaults();
     populateConfigForm();
+    populateN2TConfigForm();
     renderTargetsSection();
+    renderN2TSourcesSection(true);
   } catch (e) { showToast(t('toast_load_cfg_err', {err: e.message}), true); }
 }
 
@@ -978,6 +1371,16 @@ function clearCfgDirty() {
   if (el) el.style.display = 'none';
 }
 
+function markN2TDirty() {
+  const el = document.getElementById('n2tDirtyHint');
+  if (el) el.style.display = 'inline';
+}
+
+function clearN2TDirty() {
+  const el = document.getElementById('n2tDirtyHint');
+  if (el) el.style.display = 'none';
+}
+
 function populateConfigForm() {
   if (!appConfig) return;
   clearCfgDirty();
@@ -993,6 +1396,76 @@ function populateConfigForm() {
   document.getElementById('cfgRegMode').value = appConfig.nmos.registry_mode || 'auto';
   document.getElementById('cfgRegUrl').value = appConfig.nmos.static_registry_url || '';
   renderChannelsCfgTable();
+}
+
+function populateN2TConfigForm() {
+  if (!appConfig) return;
+  ensureN2TConfigDefaults();
+  clearN2TDirty();
+  const out = appConfig.nmos_to_tsl.output;
+  document.getElementById('n2tEnabled').value = String(!!out.enabled);
+  document.getElementById('n2tTransport').value = out.transport || 'udp';
+  document.getElementById('n2tTargetAddr').value = out.target_addr || '192.168.42.15:9001';
+  document.getElementById('n2tProtocol').value = out.protocol || 'v5.0';
+  document.getElementById('n2tLampMap').value = out.lamp_mapping || 'lh_red_rh_green';
+  document.getElementById('n2tTxtFollow').value = String(!!out.text_follows_tally);
+  document.getElementById('n2tRepeatMs').value = (out.repeat_interval_ms ?? 1000);
+  document.getElementById('n2tExposeRcv').value = String(appConfig.nmos_to_tsl.expose_is04_receivers !== false);
+}
+
+function readN2TFormIntoConfig() {
+  if (!appConfig) return;
+  ensureN2TConfigDefaults();
+  const out = appConfig.nmos_to_tsl.output;
+  out.enabled = document.getElementById('n2tEnabled').value === 'true';
+  out.transport = document.getElementById('n2tTransport').value;
+  out.target_addr = document.getElementById('n2tTargetAddr').value.trim();
+  out.protocol = document.getElementById('n2tProtocol').value;
+  out.lamp_mapping = document.getElementById('n2tLampMap').value;
+  out.text_follows_tally = document.getElementById('n2tTxtFollow').value === 'true';
+  const rep = parseInt(document.getElementById('n2tRepeatMs').value);
+  out.repeat_interval_ms = Number.isNaN(rep) ? 1000 : Math.max(0, rep);
+  if (!out.brightness) out.brightness = 3;
+  appConfig.nmos_to_tsl.expose_is04_receivers = document.getElementById('n2tExposeRcv').value === 'true';
+}
+
+function fillSimplyLiveTSLInput() {
+  let host = '192.168.42.15';
+  const lastSrc = latestStatus?.tsl_stats?.last_source_addr || '';
+  if (lastSrc && !lastSrc.startsWith('sim://')) {
+    const idx = lastSrc.lastIndexOf(':');
+    if (idx > 0) {
+      const cand = lastSrc.slice(0, idx).replace(/^\[|\]$/g, '');
+      if (cand && cand !== '127.0.0.1' && cand !== '::1') host = cand;
+    }
+  }
+  const addr = host + ':9001';
+  document.getElementById('n2tTransport').value = 'udp';
+  document.getElementById('n2tTargetAddr').value = addr;
+  document.getElementById('n2tProtocol').value = 'v5.0';
+  document.getElementById('n2tLampMap').value = 'lh_red_rh_green';
+  markN2TDirty();
+  showToast(t('n2t_toast_filled_sl', {addr}));
+}
+
+async function saveN2TConfig(customToast) {
+  if (!appConfig) await loadConfig();
+  readN2TFormIntoConfig();
+  try {
+    appConfig = await api('/api/v1/config', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(appConfig)
+    });
+    ensureN2TConfigDefaults();
+    populateN2TConfigForm();
+    renderN2TSourcesSection(true);
+    const st = await api('/api/v1/status');
+    renderStatus(st);
+    showToast(customToast || t('n2t_toast_saved'));
+  } catch (e) {
+    showToast(t('toast_save_err', {err: e.message}), true);
+  }
 }
 
 function renderChannelsCfgTable() {
@@ -1059,6 +1532,7 @@ async function saveFullConfig() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(appConfig)
     });
+    ensureN2TConfigDefaults();
     showToast(t('toast_cfg_saved'));
     const st = await api('/api/v1/status');
     renderStatus(st);
@@ -1066,41 +1540,46 @@ async function saveFullConfig() {
   } catch (e) { showToast(t('toast_save_err', {err: e.message}), true); }
 }
 
-function renderMDNSBox() {
-  const box = document.getElementById('mdnsResult');
-  if (!mdnsScanState) {
+function renderMDNSBox(scope = 'target') {
+  const boxId = (scope === 'nmos2tsl') ? 'n2tMdnsResult' : 'mdnsResult';
+  const urlId = (scope === 'nmos2tsl') ? 'inpN2TSrcUrl' : 'inpTargetUrl';
+  const lblId = (scope === 'nmos2tsl') ? 'inpN2TSrcLabel' : 'inpTargetLabel';
+  const box = document.getElementById(boxId);
+  const st = mdnsScanState[scope];
+  if (!box) return;
+  if (!st) {
     box.style.display = 'none';
     return;
   }
   box.style.display = 'block';
-  if (mdnsScanState.type === 'scanning') {
+  if (st.type === 'scanning') {
     box.innerHTML = `<span style="color:var(--muted)">${esc(t('mdns_scanning'))}</span>`;
-  } else if (mdnsScanState.type === 'empty') {
+  } else if (st.type === 'empty') {
     box.innerHTML = `<span style="color:var(--muted)">${esc(t('mdns_empty'))}</span>`;
-  } else if (mdnsScanState.type === 'found') {
-    box.innerHTML = esc(t('mdns_found')) + mdnsScanState.nodes.map(n =>
-      `<button style="margin:2px 4px" onclick="document.getElementById('inpTargetUrl').value='${esc(n.base_url)}';document.getElementById('inpTargetLabel').value='${esc(n.instance)}'">${esc(n.instance)} (${esc(n.base_url)})</button>`
+  } else if (st.type === 'found') {
+    box.innerHTML = esc(t('mdns_found')) + st.nodes.map(n =>
+      `<button style="margin:2px 4px" onclick="document.getElementById('${urlId}').value='${esc(n.base_url)}';document.getElementById('${lblId}').value='${esc(n.instance)}'">${esc(n.instance)} (${esc(n.base_url)})</button>`
     ).join('');
-  } else if (mdnsScanState.type === 'error') {
-    box.innerHTML = '<span style="color:#ff7b82">' + esc(mdnsScanState.err) + '</span>';
+  } else if (st.type === 'error') {
+    box.innerHTML = '<span style="color:#ff7b82">' + esc(st.err) + '</span>';
   }
 }
 
-async function scanMDNSNodes() {
-  mdnsScanState = {type: 'scanning'};
-  renderMDNSBox();
+async function scanMDNSNodes(scope = 'target') {
+  mdnsScanState[scope] = {type: 'scanning'};
+  renderMDNSBox(scope);
   try {
-    const rawNodes = await api('/api/v1/mdns/nodes?scan=1');
-    const nodes = Array.isArray(rawNodes) ? rawNodes : [];
+    const raw = await api('/api/v1/mdns/nodes?scan=1');
+    const nodes = Array.isArray(raw) ? raw : [];
     if (!nodes.length) {
-      mdnsScanState = {type: 'empty'};
+      mdnsScanState[scope] = {type: 'empty'};
     } else {
-      mdnsScanState = {type: 'found', nodes};
+      mdnsScanState[scope] = {type: 'found', nodes};
     }
   } catch (e) {
-    mdnsScanState = {type: 'error', err: e.message};
+    mdnsScanState[scope] = {type: 'error', err: e.message};
   }
-  renderMDNSBox();
+  renderMDNSBox(scope);
 }
 
 async function addAndInspectTarget() {
@@ -1164,9 +1643,10 @@ async function refreshTargetInspect(tIdx) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({base_url: tgt.base_url})
     });
-    syncTargetReceivers(tgt, info.receivers || []);
+    const rcvs = Array.isArray(info.receivers) ? info.receivers : [];
+    syncTargetReceivers(tgt, rcvs);
     renderTargetsSection();
-    showToast(t('toast_refreshed_gpo', {n: (info.receivers || []).length}));
+    showToast(t('toast_refreshed_gpo', {n: rcvs.length}));
   } catch (e) { showToast(t('toast_refresh_err', {err: e.message}), true); }
 }
 
@@ -1209,6 +1689,7 @@ async function persistTargetsOnly(toastMsg) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(appConfig)
     });
+    ensureN2TConfigDefaults();
     renderTargetsSection(true);
     showToast(toastMsg || t('toast_patch_saved'));
   } catch (e) { showToast(t('toast_save_err', {err: e.message}), true); }
@@ -1283,10 +1764,397 @@ function renderTargetsSection(force = true) {
             <button class="primary" onclick="persistTargetsOnly()">${esc(t('btn_save_patch'))}</button>
           </div>
         </h2>
-        <table>
-          <thead><tr><th style="width:65px">${esc(t('th_enable'))}</th><th>${esc(t('th_gpo_port'))}</th><th>${esc(t('th_bound_ch'))}</th><th>${esc(t('th_tally_color'))}</th><th>${esc(t('th_is05_status'))}</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th style="width:65px">${esc(t('th_enable'))}</th><th>${esc(t('th_gpo_port'))}</th><th>${esc(t('th_bound_ch'))}</th><th>${esc(t('th_tally_color'))}</th><th>${esc(t('th_is05_status'))}</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// --- NMOS -> TSL Reverse Gateway Functions ---
+
+function renderN2TSummary(n2t) {
+  latestN2T = n2t;
+  if (latestStatus && n2t) latestStatus.nmos2tsl = n2t;
+
+  const tx = n2t?.tx_stats || {};
+  const sessions = n2t?.sessions || [];
+  const bindings = n2t?.bindings || [];
+  const displays = n2t?.displays || [];
+
+  const enabledBinds = bindings.filter(b => b.enabled);
+  const subOkBinds = enabledBinds.filter(b => b.subscribed);
+  const connSessions = sessions.filter(s => s.connected);
+  const totalSubSrcs = sessions.reduce((acc, s) => acc + (s.subscribed_sources || 0), 0);
+
+  // Header badge
+  const n2tDot = document.getElementById('n2tDot');
+  const n2tText = document.getElementById('n2tText');
+  if (tx.enabled) {
+    n2tDot.className = 'dot ' + (tx.connected ? 'ok' : 'warn');
+    n2tText.textContent = t('n2t_badge_on', {n: subOkBinds.length});
+  } else {
+    n2tDot.className = 'dot';
+    n2tText.textContent = t('n2t_badge_off');
+  }
+
+  // Stats cards
+  const txStateStr = (currentLang === 'en' ? (tx.connection_state_en || tx.connection_state) : tx.connection_state) || '-';
+  document.getElementById('stN2TTxState').textContent = txStateStr;
+  document.getElementById('stN2TTxPkts').textContent = t('n2t_stat_tx_pkts', {
+    pkts: tx.total_packets || 0,
+    msgs: tx.total_messages || 0,
+    errs: tx.send_errors || 0
+  });
+
+  document.getElementById('stN2TSubSess').textContent = sessions.length
+    ? t('n2t_stat_ws_val', {ok: connSessions.length, total: sessions.length})
+    : t('n2t_stat_ws_none');
+  document.getElementById('stN2TSubSrcs').textContent = t('n2t_stat_ws_sub', {n: totalSubSrcs});
+
+  document.getElementById('stN2TBindSummary').textContent = enabledBinds.length
+    ? t('n2t_stat_bind_active', {ok: subOkBinds.length, total: enabledBinds.length})
+    : t('n2t_stat_bind_none');
+  const expOn = appConfig ? (appConfig.nmos_to_tsl?.expose_is04_receivers !== false) : true;
+  document.getElementById('stN2TRcvExpose').textContent = expOn ? t('n2t_stat_expose_on') : t('n2t_stat_expose_off');
+
+  renderN2TDisplays(displays);
+  renderN2TSessions(sessions);
+  if (appConfig) renderN2TSourcesSection(false);
+}
+
+function renderN2TDisplays(displays) {
+  const grid = document.getElementById('n2tDisplayGrid');
+  if (!displays || !displays.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;color:var(--muted);font-size:13px;">${esc(t('n2t_preview_empty'))}</div>`;
+    return;
+  }
+  grid.innerHTML = displays.map(d => {
+    const cls = ['cam-card'];
+    if (d.red_active) cls.push('pgm');
+    if (d.green_active) cls.push('pvw');
+    const lh0 = (d.lh_tally || 'OFF')[0];
+    const tx0 = (d.text_tally || 'OFF')[0];
+    const rh0 = (d.rh_tally || 'OFF')[0];
+    return `
+      <div class="${cls.join(' ')}">
+        <div class="cam-head">
+          <span class="cam-title">${esc(d.umd_text || ('Idx ' + d.index))}</span>
+          <span class="cam-idx">Scr:${d.screen} / Idx:${d.index}</span>
+        </div>
+        <div class="umd-box">
+          <span>${esc(d.umd_text || '—')}</span>
+          <span style="font-size:10.5px;color:#8b949e">LH:${lh0} TXT:${tx0} RH:${rh0}</span>
+        </div>
+        <div class="lamps">
+          <div class="lamp ${d.red_active ? 'red-on' : ''}">${esc(t('lamp_pgm', {st: d.red_active ? 'ON' : 'OFF'}))}</div>
+          <div class="lamp ${d.green_active ? 'green-on' : ''}">${esc(t('lamp_pvw', {st: d.green_active ? 'ON' : 'OFF'}))}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderN2TSessions(sessions) {
+  const tb = document.getElementById('n2tSessionsBody');
+  if (!sessions || !sessions.length) {
+    tb.innerHTML = `<tr><td colspan="5" style="color:var(--muted)">${esc(t('n2t_sessions_empty'))}</td></tr>`;
+    return;
+  }
+  tb.innerHTML = sessions.map(s => {
+    const stHtml = s.connected
+      ? `<span style="color:var(--tally-green);font-weight:700">${esc(t('n2t_ws_connected'))}</span>`
+      : `<span style="color:var(--warn)" title="${esc(s.last_error || '')}">${esc(t('n2t_ws_reconnecting'))}${s.last_error ? ': ' + esc(s.last_error.slice(0, 36)) : ''}</span>`;
+    return `
+      <tr>
+        <td class="mono">${esc(s.connection_uri)}</td>
+        <td>${stHtml}</td>
+        <td>${s.connected_at ? new Date(s.connected_at).toLocaleTimeString() : '—'}</td>
+        <td>${s.last_health_at ? new Date(s.last_health_at).toLocaleTimeString() : '—'}</td>
+        <td>${esc(t('ws_subs_count', {n: s.subscribed_sources || 0}))}</td>
+      </tr>`;
+  }).join('');
+}
+
+function reuseExistingTargetForGPI() {
+  const first = (appConfig?.direct_targets || [])[0];
+  if (!first || !first.base_url) {
+    return showToast(t('n2t_toast_no_dev'), true);
+  }
+  document.getElementById('inpN2TSrcUrl').value = first.base_url;
+  document.getElementById('inpN2TSrcLabel').value = first.label ? (first.label + ' GPI') : '';
+  showToast(t('n2t_toast_reused', {url: first.base_url}));
+}
+
+async function addAndInspectN2TSource() {
+  const rawUrl = document.getElementById('inpN2TSrcUrl').value.trim();
+  const label = document.getElementById('inpN2TSrcLabel').value.trim();
+  if (!rawUrl) return showToast(t('toast_enter_url'), true);
+  if (!appConfig) await loadConfig();
+  ensureN2TConfigDefaults();
+
+  try {
+    const info = await api('/api/v1/nmos2tsl/sources/inspect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base_url: rawUrl})
+    });
+    const list = appConfig.nmos_to_tsl.direct_sources;
+    let existing = list.find(d => d.base_url === info.base_url);
+    if (!existing) {
+      const srcDevId = 'gpisrc-' + Date.now();
+      const bindings = (info.senders || []).map((s, i) => ({
+        id: `${srcDevId}-b${i + 1}`,
+        sender_id: s.id,
+        sender_label: s.label,
+        source_id: s.source_id || '',
+        screen: 0,
+        index: Math.floor(i / 2),
+        role: (i % 2 === 0) ? 'red' : 'green',
+        umd_text: 'CAM ' + (Math.floor(i / 2) + 1),
+        invert: false,
+        enabled: false
+      }));
+      existing = {
+        id: srcDevId,
+        label: label || info.node_label || info.base_url,
+        base_url: info.base_url,
+        enabled: true,
+        bindings
+      };
+      list.push(existing);
+    } else {
+      syncN2TSourceSenders(existing, info.senders || []);
+    }
+    await saveN2TConfig(t('n2t_toast_probed', {n: (info.senders || []).length}));
+  } catch (e) {
+    showToast(t('toast_probe_err', {err: e.message}), true);
+  }
+}
+
+function syncN2TSourceSenders(srcDev, senders) {
+  const bySenderId = {};
+  (srcDev.bindings || []).forEach(b => { bySenderId[b.sender_id] = b; });
+  srcDev.bindings = senders.map((s, i) => {
+    const prev = bySenderId[s.id];
+    if (prev) {
+      prev.sender_label = s.label || prev.sender_label;
+      if (s.source_id) prev.source_id = s.source_id;
+      return prev;
+    }
+    return {
+      id: `${srcDev.id}-b${i + 1}-${Date.now()}`,
+      sender_id: s.id,
+      sender_label: s.label,
+      source_id: s.source_id || '',
+      screen: 0,
+      index: Math.floor(i / 2),
+      role: (i % 2 === 0) ? 'red' : 'green',
+      umd_text: 'CAM ' + (Math.floor(i / 2) + 1),
+      invert: false,
+      enabled: false
+    };
+  });
+}
+
+async function refreshN2TSourceInspect(sIdx) {
+  const srcDev = appConfig.nmos_to_tsl.direct_sources[sIdx];
+  try {
+    const info = await api('/api/v1/nmos2tsl/sources/inspect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({base_url: srcDev.base_url})
+    });
+    syncN2TSourceSenders(srcDev, info.senders || []);
+    renderN2TSourcesSection(true);
+    showToast(t('n2t_toast_refreshed', {n: (info.senders || []).length}));
+  } catch (e) {
+    showToast(t('toast_refresh_err', {err: e.message}), true);
+  }
+}
+
+function autoMapN2TDual(sIdx) {
+  const srcDev = appConfig.nmos_to_tsl.direct_sources[sIdx];
+  const selEl = document.getElementById('n2tStartIdx_' + sIdx);
+  const startIdx = selEl ? (parseInt(selEl.value) || 0) : 0;
+  autoStartIdxByN2TSrc[srcDev.id] = startIdx;
+
+  const binds = srcDev.bindings || [];
+  binds.forEach((b, i) => {
+    const camNum = Math.floor(i / 2) + 1;
+    b.screen = 0;
+    b.index = startIdx + Math.floor(i / 2);
+    b.role = (i % 2 === 0) ? 'red' : 'green';
+    b.umd_text = 'CAM ' + camNum;
+    b.enabled = true;
+  });
+  markN2TDirty();
+  renderN2TSourcesSection(true);
+  showToast(t('n2t_toast_mapped_dual', {start: startIdx, n: binds.length}));
+}
+
+function autoMapN2T1To1Red(sIdx) {
+  const srcDev = appConfig.nmos_to_tsl.direct_sources[sIdx];
+  const selEl = document.getElementById('n2tStartIdx_' + sIdx);
+  const startIdx = selEl ? (parseInt(selEl.value) || 0) : 0;
+  autoStartIdxByN2TSrc[srcDev.id] = startIdx;
+
+  const binds = srcDev.bindings || [];
+  binds.forEach((b, i) => {
+    b.screen = 0;
+    b.index = startIdx + i;
+    b.role = 'red';
+    b.umd_text = 'GPI ' + (i + 1);
+    b.enabled = true;
+  });
+  markN2TDirty();
+  renderN2TSourcesSection(true);
+  showToast(t('n2t_toast_mapped_1to1', {start: startIdx, n: binds.length}));
+}
+
+async function setN2TOverride(bindingId, mode) {
+  try {
+    await api('/api/v1/nmos2tsl/override', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({binding_id: bindingId, mode})
+    });
+  } catch (e) { showToast(e.message, true); }
+}
+
+async function resyncN2T() {
+  try {
+    await api('/api/v1/nmos2tsl/resync', {method: 'POST'});
+    showToast(t('n2t_toast_resync'));
+  } catch (e) { showToast(e.message, true); }
+}
+
+function buildN2TSignalCellHtml(bindCfg, rt) {
+  const eff = !!rt.effective_value;
+  const ov = rt.override || 'auto';
+  const pillCls = eff ? 'gpi-pill on' : 'gpi-pill';
+  const pillTxt = eff ? t('n2t_sig_on') : t('n2t_sig_off');
+  const bid = esc(bindCfg.id);
+  return `
+    <span class="${pillCls}">${esc(pillTxt)}</span>
+    <span class="mini-ov">
+      <button type="button" class="${ov==='auto'?'active-ov':''}" onclick="setN2TOverride('${bid}','auto')">${esc(t('ov_auto'))}</button>
+      <button type="button" class="${ov==='force_on'?'active-ov':''}" onclick="setN2TOverride('${bid}','force_on')">${esc(t('n2t_ov_on'))}</button>
+      <button type="button" class="${ov==='force_off'?'active-ov':''}" onclick="setN2TOverride('${bid}','force_off')">${esc(t('n2t_ov_off'))}</button>
+    </span>`;
+}
+
+function buildN2TSubStatusHtml(srcEnabled, bindCfg, rt) {
+  if (!srcEnabled || !bindCfg.enabled) {
+    return `<span style="color:var(--muted)">${esc(t('st_disabled'))}</span>`;
+  }
+  if (rt.subscribed) {
+    return `<span style="color:var(--tally-green);font-weight:700">${esc(t('n2t_st_sub_ok'))}</span>`;
+  }
+  if (rt.last_error) {
+    return `<span style="color:var(--tally-red)" title="${esc(rt.last_error)}">✖ ${esc(rt.last_error.slice(0, 38))}</span>`;
+  }
+  return `<span style="color:var(--warn)">${esc(t('n2t_st_sub_wait'))}</span>`;
+}
+
+function renderN2TSourcesSection(force = true) {
+  const container = document.getElementById('n2tSourcesContainer');
+  if (!container) return;
+  ensureN2TConfigDefaults();
+
+  const rtMap = {};
+  if (latestN2T && latestN2T.bindings) {
+    latestN2T.bindings.forEach(b => { rtMap[b.binding_id] = b; });
+  }
+
+  // If user is actively typing inside an input/select in this container, update only live telemetry cells in-place!
+  if (!force && document.activeElement && container.contains(document.activeElement)) {
+    (appConfig.nmos_to_tsl.direct_sources || []).forEach(src => {
+      (src.bindings || []).forEach(b => {
+        const rt = rtMap[b.id] || {};
+        const sigEl = document.getElementById('n2tSig_' + b.id);
+        if (sigEl) sigEl.innerHTML = buildN2TSignalCellHtml(b, rt);
+        const subEl = document.getElementById('n2tSub_' + b.id);
+        if (subEl) subEl.innerHTML = buildN2TSubStatusHtml(src.enabled, b, rt);
+      });
+    });
+    return;
+  }
+
+  const sources = appConfig?.nmos_to_tsl?.direct_sources || [];
+  if (!sources.length) {
+    container.innerHTML = `<div class="card-panel" style="color:var(--muted)">${esc(t('n2t_sources_empty'))}</div>`;
+    return;
+  }
+
+  container.innerHTML = sources.map((src, sIdx) => {
+    const selStart = autoStartIdxByN2TSrc[src.id] ?? 0;
+    const rows = (src.bindings || []).map((b, bIdx) => {
+      const rt = rtMap[b.id] || {};
+      return `
+        <tr>
+          <td><input type="checkbox" ${b.enabled?'checked':''} onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].enabled=this.checked;markN2TDirty()"></td>
+          <td><b>${esc(b.sender_label || 'GPI')}</b><div class="mono" style="font-size:11px;color:var(--muted)">${esc(b.sender_id)}</div></td>
+          <td id="n2tSig_${esc(b.id)}" style="white-space:nowrap">${buildN2TSignalCellHtml(b, rt)}</td>
+          <td>
+            <select onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].invert=(this.value==='true');markN2TDirty()">
+              <option value="false" ${!b.invert?'selected':''}>${esc(t('n2t_pol_no'))}</option>
+              <option value="true" ${b.invert?'selected':''}>${esc(t('n2t_pol_nc'))}</option>
+            </select>
+          </td>
+          <td><input type="number" value="${b.screen ?? 0}" min="0" max="65535" style="width:72px" oninput="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].screen=parseInt(this.value)||0;markN2TDirty()" onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].screen=parseInt(this.value)||0;markN2TDirty()"></td>
+          <td><input type="number" value="${b.index ?? 0}" min="0" max="65535" style="width:78px" oninput="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].index=parseInt(this.value)||0;markN2TDirty()" onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].index=parseInt(this.value)||0;markN2TDirty()"></td>
+          <td>
+            <select onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].role=this.value;markN2TDirty()">
+              <option value="red" ${b.role==='red'?'selected':''}>${esc(t('opt_color_red'))}</option>
+              <option value="green" ${b.role==='green'?'selected':''}>${esc(t('opt_color_green'))}</option>
+              <option value="amber" ${b.role==='amber'?'selected':''}>${esc(t('opt_color_amber'))}</option>
+            </select>
+          </td>
+          <td><input type="text" value="${esc(b.umd_text || '')}" style="width:115px" oninput="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].umd_text=this.value;markN2TDirty()" onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].bindings[${bIdx}].umd_text=this.value;markN2TDirty()"></td>
+          <td id="n2tSub_${esc(b.id)}">${buildN2TSubStatusHtml(src.enabled, b, rt)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="card-panel">
+        <h2>
+          <span>
+            <input type="checkbox" ${src.enabled?'checked':''} onchange="appConfig.nmos_to_tsl.direct_sources[${sIdx}].enabled=this.checked;markN2TDirty()">
+            ${esc(src.label)} <span class="mono" style="color:var(--muted);font-weight:400">(${esc(src.base_url)})</span>
+          </span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <select id="n2tStartIdx_${sIdx}" onchange="autoStartIdxByN2TSrc['${esc(src.id)}']=parseInt(this.value)">
+              <option value="0" ${selStart===0?'selected':''}>${esc(t('n2t_opt_idx0'))}</option>
+              <option value="1" ${selStart===1?'selected':''}>${esc(t('n2t_opt_idx1'))}</option>
+            </select>
+            <button type="button" onclick="autoMapN2TDual(${sIdx})">${esc(t('n2t_btn_map_dual8'))}</button>
+            <button type="button" onclick="autoMapN2T1To1Red(${sIdx})">${esc(t('n2t_btn_map_red16'))}</button>
+            <button type="button" onclick="refreshN2TSourceInspect(${sIdx})">${esc(t('n2t_btn_rescan_gpi'))}</button>
+            <button type="button" class="danger" onclick="appConfig.nmos_to_tsl.direct_sources.splice(${sIdx},1);saveN2TConfig(t('toast_target_removed'))">${esc(t('btn_delete_target'))}</button>
+            <button type="button" class="primary" onclick="saveN2TConfig()">${esc(t('n2t_btn_save_sub'))}</button>
+          </div>
+        </h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:58px">${esc(t('th_enable'))}</th>
+                <th>${esc(t('n2t_th_gpi_port'))}</th>
+                <th>${esc(t('n2t_th_live_sig'))}</th>
+                <th>${esc(t('n2t_th_polarity'))}</th>
+                <th>${esc(t('n2t_th_screen'))}</th>
+                <th>${esc(t('n2t_th_index'))}</th>
+                <th>${esc(t('n2t_th_role'))}</th>
+                <th>${esc(t('n2t_th_umd'))}</th>
+                <th>${esc(t('n2t_th_sub_st'))}</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
       </div>`;
   }).join('');
 }
@@ -1357,6 +2225,7 @@ function connectSSE() {
   es.addEventListener('status', e => renderStatus(JSON.parse(e.data)));
   es.addEventListener('channels', e => renderChannels(JSON.parse(e.data)));
   es.addEventListener('sniffer', e => pushSnifferRow(JSON.parse(e.data)));
+  es.addEventListener('nmos2tsl', e => renderN2TSummary(JSON.parse(e.data)));
 }
 
 (async function init() {
@@ -1368,10 +2237,14 @@ function connectSSE() {
       api('/api/v1/config')
     ]);
     appConfig = cfg;
+    ensureN2TConfigDefaults();
     snifferRows = (sniff || []).reverse();
     renderStatus(st);
     renderSnifferTable();
     populateConfigForm();
+    populateN2TConfigForm();
+    renderTargetsSection(true);
+    renderN2TSourcesSection(true);
   } catch (e) { console.error(e); }
   connectSSE();
 })();

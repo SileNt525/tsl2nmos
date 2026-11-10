@@ -106,6 +106,53 @@ type NMOSConfig struct {
 	HeartbeatIntervalSec int    `yaml:"heartbeat_interval_sec" json:"heartbeat_interval_sec"`
 }
 
+// TSLOutputConfig configures outbound TSL UMD v5.0 / v3.1 transmission for NMOS -> TSL mode
+// (e.g., feeding SimplyLive ViBox TSL_Input on UDP port 9001).
+type TSLOutputConfig struct {
+	Enabled          bool   `yaml:"enabled" json:"enabled"`
+	Transport        string `yaml:"transport" json:"transport"`                   // "udp", "tcp_client", "tcp_server"
+	TargetAddr       string `yaml:"target_addr" json:"target_addr"`               // e.g. "192.168.42.15:9001" or "0.0.0.0:8902"
+	Protocol         string `yaml:"protocol" json:"protocol"`                     // "v5.0" or "v3.1"
+	UseDLEFraming    bool   `yaml:"use_dle_framing" json:"use_dle_framing"`       // Wrap TSL 5.0 packets with DLE/STX
+	UTF16            bool   `yaml:"utf16" json:"utf16"`                           // Encode TSL 5.0 UMD text as UTF-16LE
+	LampMapping      string `yaml:"lamp_mapping" json:"lamp_mapping"`             // "lh_red_rh_green", "rh_red_lh_green", "both_color"
+	TextFollowsTally bool   `yaml:"text_follows_tally" json:"text_follows_tally"` // Illuminate TextTally along with lamp tally
+	Brightness       uint8  `yaml:"brightness" json:"brightness"`                 // 0..3 (default 3)
+	RepeatIntervalMs int    `yaml:"repeat_interval_ms" json:"repeat_interval_ms"` // Periodic state refresh in ms (0 = on-change only)
+}
+
+// GPIBindingConfig maps a remote NMOS IS-07 Boolean Sender (e.g. Riedel NSA-010C GPInput 1..16)
+// onto an outbound TSL (Screen, Index) display and tally role.
+type GPIBindingConfig struct {
+	ID          string `yaml:"id" json:"id"`
+	SenderID    string `yaml:"sender_id" json:"sender_id"`
+	SenderLabel string `yaml:"sender_label" json:"sender_label"`
+	SourceID    string `yaml:"source_id,omitempty" json:"source_id,omitempty"`
+	Screen      uint16 `yaml:"screen" json:"screen"`
+	Index       uint16 `yaml:"index" json:"index"`
+	Role        string `yaml:"role" json:"role"` // "red", "green", "amber"
+	UMDText     string `yaml:"umd_text,omitempty" json:"umd_text,omitempty"`
+	Invert      bool   `yaml:"invert" json:"invert"`
+	Enabled     bool   `yaml:"enabled" json:"enabled"`
+}
+
+// DirectSourceConfig represents an NMOS IS-07-GPIO input device (such as Riedel StageLink NSA-010C's 16 GPIs)
+// subscribed via IS-07 WebSocket to generate outbound TSL tally messages.
+type DirectSourceConfig struct {
+	ID       string             `yaml:"id" json:"id"`
+	Label    string             `yaml:"label" json:"label"`
+	BaseURL  string             `yaml:"base_url" json:"base_url"`
+	Enabled  bool               `yaml:"enabled" json:"enabled"`
+	Bindings []GPIBindingConfig `yaml:"bindings" json:"bindings"`
+}
+
+// NMOSToTSLConfig configures the reverse NMOS IS-07 -> TSL gateway pipeline.
+type NMOSToTSLConfig struct {
+	Output              TSLOutputConfig      `yaml:"output" json:"output"`
+	ExposeIS04Receivers bool                 `yaml:"expose_is04_receivers" json:"expose_is04_receivers"`
+	DirectSources       []DirectSourceConfig `yaml:"direct_sources" json:"direct_sources"`
+}
+
 // Config is the root configuration document for TSL2NMOS.
 type Config struct {
 	Node          NodeConfig           `yaml:"node" json:"node"`
@@ -113,6 +160,7 @@ type Config struct {
 	NMOS          NMOSConfig           `yaml:"nmos" json:"nmos"`
 	Channels      []ChannelConfig      `yaml:"channels" json:"channels"`
 	DirectTargets []DirectTargetConfig `yaml:"direct_targets" json:"direct_targets"`
+	NMOSToTSL     NMOSToTSLConfig      `yaml:"nmos_to_tsl" json:"nmos_to_tsl"`
 }
 
 // DefaultConfig generates a sensible studio default configuration (8 cameras = 16 Red/Green tally flows,
@@ -164,6 +212,22 @@ func DefaultConfig() Config {
 		},
 		Channels:      channels,
 		DirectTargets: []DirectTargetConfig{},
+		NMOSToTSL: NMOSToTSLConfig{
+			Output: TSLOutputConfig{
+				Enabled:          false,
+				Transport:        "udp",
+				TargetAddr:       "",
+				Protocol:         "v5.0",
+				UseDLEFraming:    false,
+				UTF16:            false,
+				LampMapping:      "lh_red_rh_green",
+				TextFollowsTally: false,
+				Brightness:       3,
+				RepeatIntervalMs: 1000,
+			},
+			ExposeIS04Receivers: true,
+			DirectSources:       []DirectSourceConfig{},
+		},
 	}
 }
 
@@ -336,6 +400,61 @@ func ValidateAndNormalize(cfg *Config) error {
 			}
 		}
 	}
+
+	outCfg := &cfg.NMOSToTSL.Output
+	switch outCfg.Transport {
+	case "udp", "tcp_client", "tcp_server":
+	default:
+		outCfg.Transport = "udp"
+	}
+	outCfg.TargetAddr = strings.TrimSpace(outCfg.TargetAddr)
+	if outCfg.TargetAddr != "" && !strings.Contains(outCfg.TargetAddr, ":") {
+		// Default bare IP to port 9001 (SimplyLive ViBox TSL_Input default; user can specify any :port).
+		outCfg.TargetAddr = net.JoinHostPort(outCfg.TargetAddr, "9001")
+	}
+	switch outCfg.Protocol {
+	case "v5.0", "v3.1":
+	default:
+		outCfg.Protocol = "v5.0"
+	}
+	switch outCfg.LampMapping {
+	case "lh_red_rh_green", "rh_red_lh_green", "both_color":
+	default:
+		outCfg.LampMapping = "lh_red_rh_green"
+	}
+	if outCfg.Brightness > 3 {
+		outCfg.Brightness = 3
+	}
+	if outCfg.RepeatIntervalMs < 0 {
+		outCfg.RepeatIntervalMs = 0
+	}
+
+	for i := range cfg.NMOSToTSL.DirectSources {
+		src := &cfg.NMOSToTSL.DirectSources[i]
+		src.BaseURL = strings.TrimRight(strings.TrimSpace(src.BaseURL), "/")
+		if src.ID == "" {
+			src.ID = fmt.Sprintf("source-%d", i+1)
+		}
+		if src.Label == "" {
+			src.Label = src.BaseURL
+		}
+		for j := range src.Bindings {
+			b := &src.Bindings[j]
+			if b.ID == "" {
+				if b.SenderID != "" {
+					b.ID = fmt.Sprintf("%s:%s", src.ID, b.SenderID)
+				} else {
+					b.ID = fmt.Sprintf("%s:gpi-%d", src.ID, j+1)
+				}
+			}
+			b.Role = strings.ToLower(strings.TrimSpace(b.Role))
+			switch b.Role {
+			case "red", "green", "amber":
+			default:
+				b.Role = "red"
+			}
+		}
+	}
 	return nil
 }
 
@@ -424,6 +543,12 @@ func cloneConfig(in Config) Config {
 		out.DirectTargets[i] = dt
 		out.DirectTargets[i].Bindings = make([]GPOBindingConfig, len(dt.Bindings))
 		copy(out.DirectTargets[i].Bindings, dt.Bindings)
+	}
+	out.NMOSToTSL.DirectSources = make([]DirectSourceConfig, len(in.NMOSToTSL.DirectSources))
+	for i, ds := range in.NMOSToTSL.DirectSources {
+		out.NMOSToTSL.DirectSources[i] = ds
+		out.NMOSToTSL.DirectSources[i].Bindings = make([]GPIBindingConfig, len(ds.Bindings))
+		copy(out.NMOSToTSL.DirectSources[i].Bindings, ds.Bindings)
 	}
 	return out
 }

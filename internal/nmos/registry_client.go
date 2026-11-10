@@ -39,10 +39,11 @@ type RegistryClient struct {
 	registered        bool
 	lastHeartbeat     time.Time
 	lastErr           string
-	registeredSenders map[string]struct{}
-	registeredFlows   map[string]struct{}
-	registeredSources map[string]struct{}
-	resyncCh          chan struct{}
+	registeredSenders   map[string]struct{}
+	registeredReceivers map[string]struct{}
+	registeredFlows     map[string]struct{}
+	registeredSources   map[string]struct{}
+	resyncCh            chan struct{}
 }
 
 // NewRegistryClient creates an IS-04 Registration API client.
@@ -56,14 +57,15 @@ func NewRegistryClient(store *Store, mdns *MDNSService, cfg config.NMOSConfig, l
 		client: &http.Client{
 			Timeout: 4 * time.Second,
 		},
-		log:               logger,
-		mode:              cfg.RegistryMode,
-		staticURL:         strings.TrimRight(cfg.StaticRegistryURL, "/"),
-		heartbeatSec:      cfg.HeartbeatIntervalSec,
-		registeredSenders: make(map[string]struct{}),
-		registeredFlows:   make(map[string]struct{}),
-		registeredSources: make(map[string]struct{}),
-		resyncCh:          make(chan struct{}, 1),
+		log:                 logger,
+		mode:                cfg.RegistryMode,
+		staticURL:           strings.TrimRight(cfg.StaticRegistryURL, "/"),
+		heartbeatSec:        cfg.HeartbeatIntervalSec,
+		registeredSenders:   make(map[string]struct{}),
+		registeredReceivers: make(map[string]struct{}),
+		registeredFlows:     make(map[string]struct{}),
+		registeredSources:   make(map[string]struct{}),
+		resyncCh:            make(chan struct{}, 1),
 	}
 	return rc
 }
@@ -276,6 +278,7 @@ func (r *RegistryClient) probeRegistrationVersion(ctx context.Context, base stri
 
 func (r *RegistryClient) registerAll(ctx context.Context, regBase string) error {
 	node, device, sources, flows, senders := r.store.SnapshotResources()
+	receivers := r.store.SnapshotReceivers()
 
 	if err := r.postResource(ctx, regBase, "node", node); err != nil {
 		return fmt.Errorf("register node: %w", err)
@@ -305,9 +308,21 @@ func (r *RegistryClient) registerAll(ctx context.Context, regBase string) error 
 			return fmt.Errorf("register sender %s: %w", s.ID, err)
 		}
 	}
+	curRcv := make(map[string]struct{}, len(receivers))
+	for _, rcv := range receivers {
+		curRcv[rcv.ID] = struct{}{}
+		if err := r.postResource(ctx, regBase, "receiver", rcv); err != nil {
+			return fmt.Errorf("register receiver %s: %w", rcv.ID, err)
+		}
+	}
 
-	// Clean up stale resources if channel count was reduced.
+	// Clean up stale resources if channel/receiver count was reduced.
 	r.mu.Lock()
+	for oldRcv := range r.registeredReceivers {
+		if _, keep := curRcv[oldRcv]; !keep {
+			_ = r.deleteResource(ctx, regBase, "receivers", oldRcv)
+		}
+	}
 	for oldSnd := range r.registeredSenders {
 		if _, keep := curSnd[oldSnd]; !keep {
 			_ = r.deleteResource(ctx, regBase, "senders", oldSnd)
@@ -326,9 +341,15 @@ func (r *RegistryClient) registerAll(ctx context.Context, regBase string) error 
 	r.registeredSources = curSrc
 	r.registeredFlows = curFlw
 	r.registeredSenders = curSnd
+	r.registeredReceivers = curRcv
 	r.mu.Unlock()
 
-	r.log.Info("Registered NMOS IS-04 resources", "registry", regBase, "sources", len(sources), "senders", len(senders))
+	r.log.Info("Registered NMOS IS-04 resources",
+		"registry", regBase,
+		"sources", len(sources),
+		"senders", len(senders),
+		"receivers", len(receivers),
+	)
 	return nil
 }
 

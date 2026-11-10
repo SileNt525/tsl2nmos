@@ -14,6 +14,7 @@ import (
 	"tsl2nmos/internal/config"
 	"tsl2nmos/internal/controller"
 	"tsl2nmos/internal/nmos"
+	"tsl2nmos/internal/nmos2tsl"
 	"tsl2nmos/internal/tally"
 	"tsl2nmos/internal/tsl"
 )
@@ -26,17 +27,18 @@ type ReloadCallback func(newCfg config.Config)
 
 // Server provides the embedded Web UI and JSON/SSE management APIs.
 type Server struct {
-	cfgMgr   *config.Manager
-	tslList  *tsl.Listener
-	engine   *tally.Engine
-	store    *nmos.Store
-	wsHub    *nmos.WSHub
-	regCli   *nmos.RegistryClient
-	mdnsSvc  *nmos.MDNSService
-	patcher  *controller.DirectPatcher
-	onReload ReloadCallback
-	log      *slog.Logger
-	started  time.Time
+	cfgMgr    *config.Manager
+	tslList   *tsl.Listener
+	engine    *tally.Engine
+	store     *nmos.Store
+	wsHub     *nmos.WSHub
+	regCli    *nmos.RegistryClient
+	mdnsSvc   *nmos.MDNSService
+	patcher   *controller.DirectPatcher
+	n2tBridge *nmos2tsl.Bridge
+	onReload  ReloadCallback
+	log       *slog.Logger
+	started   time.Time
 }
 
 // NewServer constructs the Web Console & Management API handler.
@@ -70,6 +72,11 @@ func NewServer(
 	}
 }
 
+// SetNMOS2TSLBridge attaches the NMOS -> TSL reverse gateway bridge to the Web API server.
+func (s *Server) SetNMOS2TSLBridge(b *nmos2tsl.Bridge) {
+	s.n2tBridge = b
+}
+
 // RegisterRoutes mounts the Web UI ("/") and management APIs ("/api/v1/...") onto mux.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	sub, _ := fs.Sub(staticFS, "static")
@@ -86,13 +93,16 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/targets/resync", s.handleResyncTargets)
 	mux.HandleFunc("/api/v1/targets/disconnect", s.handleDisconnectReceiver)
 	mux.HandleFunc("/api/v1/mdns/nodes", s.handleMDNSNodes)
+	mux.HandleFunc("/api/v1/nmos2tsl/sources/inspect", s.handleInspectN2TSource)
+	mux.HandleFunc("/api/v1/nmos2tsl/resync", s.handleResyncN2T)
+	mux.HandleFunc("/api/v1/nmos2tsl/override", s.handleN2TOverride)
 }
 
 func (s *Server) buildStatusPayload() map[string]any {
 	node, _, _, _, _ := s.store.SnapshotResources()
 	hostIP, port := s.store.HostEndpoint()
 
-	return map[string]any{
+	payload := map[string]any{
 		"uptime_sec":       int64(time.Since(s.started).Seconds()),
 		"node_id":          node.ID,
 		"node_label":       node.Label,
@@ -105,6 +115,10 @@ func (s *Server) buildStatusPayload() map[string]any {
 		"binding_statuses": s.patcher.Statuses(),
 		"channels":         s.engine.Snapshots(),
 	}
+	if s.n2tBridge != nil {
+		payload["nmos2tsl"] = s.n2tBridge.Status()
+	}
+	return payload
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +155,13 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	chSniff, unsubSniff := s.tslList.SubscribeSniffer()
 	defer unsubSniff()
 
+	var chN2T chan nmos2tsl.StatusSummary
+	if s.n2tBridge != nil {
+		var unsubN2T func()
+		chN2T, unsubN2T = s.n2tBridge.SubscribeUI()
+		defer unsubN2T()
+	}
+
 	sendEvent := func(evType string, data any) error {
 		b, err := json.Marshal(data)
 		if err != nil {
@@ -175,6 +196,13 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if sendEvent("sniffer", pkt) != nil {
+				return
+			}
+		case n2tSnap, ok := <-chN2T:
+			if !ok {
+				return
+			}
+			if sendEvent("nmos2tsl", n2tSnap) != nil {
 				return
 			}
 		case <-ticker.C:
@@ -346,6 +374,68 @@ func (s *Server) handleMDNSNodes(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(450 * time.Millisecond)
 	}
 	writeJSON(w, http.StatusOK, s.mdnsSvc.DiscoveredNodes())
+}
+
+func (s *Server) handleInspectN2TSource(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.n2tBridge == nil {
+		writeErr(w, http.StatusServiceUnavailable, "nmos2tsl bridge unavailable")
+		return
+	}
+	var req struct {
+		BaseURL string `json:"base_url"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+	defer cancel()
+
+	info, err := s.n2tBridge.InspectSourceDevice(ctx, req.BaseURL)
+	if err != nil {
+		writeErr(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (s *Server) handleResyncN2T(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.n2tBridge != nil {
+		s.n2tBridge.TriggerSync()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleN2TOverride(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if s.n2tBridge == nil {
+		writeErr(w, http.StatusServiceUnavailable, "nmos2tsl bridge unavailable")
+		return
+	}
+	var req struct {
+		BindingID string                `json:"binding_id"` // "*" = apply to all GPI bindings
+		Mode      nmos2tsl.OverrideMode `json:"mode"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !s.n2tBridge.SetOverride(req.BindingID, req.Mode) {
+		writeErr(w, http.StatusBadRequest, "invalid binding_id or override mode")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

@@ -92,4 +92,15 @@ func TestDeterministicUUIDStabilityAndIS04IS05IS07APIs(t *testing.T) {
 	if active.MasterEnable {
 		t.Fatalf("expected scheduled activation to set master_enable=false")
 	}
+
+	// 4. Verify MDNSService empty slices serialize to JSON "[]" (never "null")
+	mdnsSvc := nmos.NewMDNSService(store1, nil)
+	rawNodes, err := json.Marshal(mdnsSvc.DiscoveredNodes())
+	if err != nil || string(rawNodes) != "[]" {
+		t.Fatalf("expected DiscoveredNodes() JSON to be [], got %q (err=%v)", string(rawNodes), err)
+	}
+	rawRegs, err := json.Marshal(mdnsSvc.DiscoveredRegistries())
+	if err != nil || string(rawRegs) != "[]" {
+		t.Fatalf("expected DiscoveredRegistries() JSON to be [], got %q (err=%v)", string(rawRegs), err)
+	}
 }
